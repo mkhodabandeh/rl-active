@@ -4,7 +4,7 @@ logger = logging.getLogger(__name__)
 import numpy as np
 
 import gym
-from classifiers import Classifier, lenet
+from classifiers import Classifier
 from gym import error, spaces
 from gym.utils import closer
 
