@@ -1,1 +1,1 @@
-from LeNet import LeNet
+# Init

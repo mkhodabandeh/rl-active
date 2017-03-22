@@ -1,23 +1,20 @@
+from lenet import LeNet
+
 class Classifier(object):
+    CLASSIFIERS = [LeNet]
 
     @classmethod
     def get_classifier(self, classifier_name, config_path):
-        subclasses = {cls.__class__.__name__:cls for cls in self.__subclasses__()}
-        if classifier_name not in subclasses:
-            raise Exception('Classifier not existed in:'+ str(subclasses.keys()))
-        return subclasses[classifier_name](config_path)
+        for cls in self.CLASSIFIERS:
+            if cls.name == classifier_name:
+                return cls(config_path)
+        raise Exception('Classifier, {0}, is not existed in: {1}'.format(classifier_name ,str(self.get_classifiers_list())) 
+       
+    @classmethod
+    def get_classifiers_list(self):
+        return [cls.name for cls in self.CLASSIFIERS]
 
+    def __init__(self):
+        raise NotImplementedError
+    
 
-    def train(self):
-        self._train() 
-    def predict(self):
-        self._predict()
-    def get_accuracy(self):
-        self._get_accuracy()
-        
-    def _train(self):
-        raise NotImplementedError
-    def _predict(self):
-        raise NotImplementedError
-    def _get_accuracy(self):
-        raise NotImplementedError
