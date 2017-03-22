@@ -1,8 +1,7 @@
-# rl-active
-Revisiting Active Learning: A Reinforcement Learning Approach
+# [rl-active] Revisiting Active Learning: A Reinforcement Learning Approach
 
 
-## Installing Deps (Ubuntu)
+### Installing Dependencies (Ubuntu)
 
 ```csh
 sudo apt-get install golang libjpeg-turbo8-dev make
@@ -11,7 +10,7 @@ sudo apt-get install \
     linux-image-extra-virtual
 ```
 
-## Installing Universe
+### Installing Universe
 ```csh
 git clone https://github.com/openai/universe.git
 cd universe
