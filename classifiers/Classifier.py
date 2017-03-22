@@ -1,5 +1,3 @@
-
-
 class Classifier(object):
 
     @classmethod
@@ -23,5 +21,3 @@ class Classifier(object):
         raise NotImplementedError
     def _get_accuracy(self):
         raise NotImplementedError
-
-

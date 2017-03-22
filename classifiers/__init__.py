@@ -1,1 +1,1 @@
-from lenet import LeNet
+from LeNet import LeNet
