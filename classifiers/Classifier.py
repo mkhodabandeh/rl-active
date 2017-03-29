@@ -17,4 +17,7 @@ class Classifier(object):
     def __init__(self):
         raise NotImplementedError
     
-
+def test_classifier():
+    cls = Classifier.get_classifier('LeNet', 'config_path')
+    cls.train()
+    pred_labels = cls.predict()
