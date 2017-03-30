@@ -43,9 +43,26 @@ class (gym.Env):
         self.classifier_name = classifier_name
         self.dataset_name = dataset_name
 
-        self._load_dataset(dataset_name)
+        # self._load_dataset(dataset_name)
         self.classifier = Classifier.get_classifier(classifier_name, config_path, dataset_name)
-        self.state = []
+
+	n = self.classifier.train_n
+
+	self.action_space = spaces.Tuple((
+                                          spaces.Discrete(n), # which instance to annotate (n -> size of the training set) 
+                                          spaces.MultiBinary(1) # retrain the classifier using the new data 
+                                           )) #TODO: verify this 
+	#self.is_annotated = spaces.Tuple(spaces.MultiBinary(n))
+	self.is_annotated = set() 
+        # observation features, in order: num of instances, num of labels,
+        # number of filter in part A / B of neural net, num of neurons in
+        # output layer, validation accuracy after training with given
+        # parameters
+	# n_classes = self.dataset.n_classes
+        # self.observation_space = spaces.Tuple([spaces.Tuple([spaces.Box(0,1, 1) for i in n_classes]) for j in n]) # validation accuracy
+
+        # Start the first game
+        # self._reset() 
         # self.classifier.train() 
     # def __new__(cls, *args, **kwargs):
         # # We use __new__ since we want the env author to be able to
@@ -56,8 +73,8 @@ class (gym.Env):
 
         # # Will be automatically set when creating an environment via 'make'
         # return env
-    def _load_dataset(dataset_name):
-        self.dataset = Dataset(dataset_name)
+    # def _load_dataset(dataset_name):
+        # self.dataset = Dataset(dataset_name)
     # Set this in SOME subclasses
     metadata = {'render.modes': []}
     reward_range = (-np.inf, np.inf)
@@ -71,8 +88,21 @@ class (gym.Env):
     observation_space = None
 
     # Override in ALL subclasses
-    def _step(self, action): raise NotImplementedError
-    def _reset(self): raise NotImplementedError
+    def _step(self, action):
+	label_i, do_train = action #action is a Tuple ( n, binary)
+	if do_train[0] == 1: 
+		self.classifier.set_annotations(self.is_annotated)
+		self.classifier.train()
+	else:
+		self.is_annotated.add(label_i)
+
+	#TODO: define reward
+	
+    def _reset(self): 
+        self.classifier = Classifier.get_classifier(classifier_name, config_path, dataset_name)
+	self.is_annotated = set() 
+
+
     def _render(self, mode='human', close=False): return
     def _seed(self, seed=None): return []
 
@@ -103,7 +133,7 @@ class (gym.Env):
         # Returns: observation (object): the initial observation of the
             # space.
         # """
-        # return self._reset()
+	return self._reset()
 
     # def render(self, mode='human', close=False):
         # """Renders the environment.
