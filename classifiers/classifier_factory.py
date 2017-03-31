@@ -1,9 +1,10 @@
 from lenet import LeNet
+
 class ClassifierFactory(object):
     CLASSIFIERS = [LeNet]
 
     @classmethod
-    def get_classifier(self, classifier_name, config_path):
+    def get_classifier(self, classifier_name, database_name, config_path):
         for cls in self.CLASSIFIERS:
             if cls.name == classifier_name:
                 return cls(config_path)

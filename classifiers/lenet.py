@@ -16,18 +16,19 @@ class LeNet(BaseClassifier):
     and a load nondefault data method. These two methods together use preprocess_data
     to convert input to desired format, and sets training parameters.
     '''
+    name = 'LeNet'
     def __init__(self, config_path=None):
         if config_path:
             self.configs = yaml.load(open(config_path))
             # self.data = self.configs['data']
         else:
+            self.configs = {'snapshot':'./snapshots/'}
             self.batch_size = 128
-            self.num_classes = 10
-            self.epochs = 12
+            self.epochs = 2
         self._get_default_data()
         self._create_model()
         self.ep = 0
-
+        
     def _preprocess_data(self):
         img_rows, img_cols = 28, 28
         if K.image_data_format() == 'channels_first':
@@ -47,20 +48,27 @@ class LeNet(BaseClassifier):
     
     def _get_default_data(self):
         from keras.datasets import mnist
-
+        self.num_classes = 10
 
         (self.x_train, self.y_train), (self.x_test, self.y_test) = mnist.load_data()
+
         self._preprocess_data()
 
         print('x_train shape:', self.x_train.shape)
         print(self.x_train.shape[0], 'train samples')
         print(self.x_test.shape[0], 'test_samples')
 
+    def _get_class_n(self):
+        """
+        This function gives number of classes and number of training samples
+        """
+        return  self.num_classes
+
     def _get_train_n(self):
         """
         This function gives number of classes and number of training samples
         """
-        return self.x_train.shape[0], self.num_classes
+        return self.x_train.shape[0]
 
 
 

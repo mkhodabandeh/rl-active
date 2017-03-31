@@ -4,14 +4,22 @@ class BaseClassifier(object):
     name = None
 
     def __init__(self, config_path=None):
-        self.config_path = config_path
-        self.is_annotated = set()
+        pass
+        # self.config_path = config_path
+        # self.is_annotated = set()
+
     def _train(self): 
         """
             This function trains the classifier on the training set 
         """
         raise NotImplementedError
     
+    def _get_class_n(self):
+        """
+        This function gives number of classes and number of training samples
+        """
+        raise NotImplementedError
+
     def _get_train_n(self):
         """
         This function gives number of classes and number of training samples
@@ -34,18 +42,24 @@ class BaseClassifier(object):
         """
         This function adds a new annotation.
         """
-        self.is_annotated += is_annotated
-    
+        if hasattr(self, 'is_annotated'):
+            self.is_annotated.update(is_annotated)
+        else:
+            self.is_annotated = is_annotated
 
 
     ###### no need to implement these in subclasses ###########
     def train(self):
         self._reset()
-        self._train()
-        self._save_model()
+        probs = self._train()
+        # self._save_model()
+        return probs
+
     def predict(self):
-        self._predict()
+        return self._predict()
     def evaluate(self):
-        self._evaluate()
+        return self._evaluate()
+    def get_class_n(self):
+        return self._get_class_n()
     def get_train_n(self):
-        self._get_train_n()
+        return self._get_train_n()

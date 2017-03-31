@@ -4,10 +4,10 @@ logger = logging.getLogger(__name__)
 import numpy as np
 
 import gym
-from classifiers import Classifier
+from classifiers.classifier_factory import ClassifierFactory
 from gym import error, spaces
 from gym.utils import closer
-from dataset import Dataset
+# from dataset import Dataset
 # env_closer = closer.Closer()
 
 # Env-related abstractions
@@ -44,17 +44,20 @@ class ActiveLearningEnv(gym.Env):
     def __init__(self, classifier_name, dataset_name):
         self.classifier_name = classifier_name
         self.dataset_name = dataset_name
-        self.classifier = Classifier.get_classifier(classifier_name, config_path, dataset_name)
+        config_path = ''
+        self.classifier = ClassifierFactory.get_classifier(classifier_name,  dataset_name, config_path)
 	self.n = self.classifier.get_train_n()
         self.k = self.classifier.get_class_n()
-	self.action_space = spaces.Tuple((
-                                          spaces.Discrete(self.n), # which instance to annotate (n -> size of the training set) 
-                                          spaces.MultiBinary(1) # retrain the classifier using the new data 
-                                           )) #TODO: verify this 
+        self.action_space = spaces.Tuple((
+                                  spaces.Discrete(self.n), # which instance to annotate (n -> size of the training set) 
+                                  spaces.MultiBinary(1) # retrain the classifier using the new data 
+                                   )) #TODO: verify this 
 	self.is_annotated = set() 
-        self.probs = np.zeros((n,k))        
+        print self.n, self.k
+        self.probs = np.zeros((self.n,self.k))        
         self.best_val = 0
        	self.new_annotations = 0 
+        self.previous_acc = 0
 	# n_classes = self.dataset.n_classes
         self.max_annotations = self.n
         # self.observation_space = spaces.Tuple([spaces.Tuple([spaces.Box(0,1, 1) for i in n_classes]) for j in n]) # validation accuracy
@@ -86,8 +89,9 @@ class ActiveLearningEnv(gym.Env):
             
 	else:
             self.is_annotated.add(label_i)
-        done = len(is_annotated) == self.max_annotations
-        return (self.probs, self.is_annotated), self._compute_reward(), done, None 
+            reward = self._compute_reward()
+        done = len(self.is_annotated) == self.max_annotations
+        return (self.probs, self.is_annotated), reward, done, None 
         
 
     def _reset(self): 
