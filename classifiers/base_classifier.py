@@ -11,6 +11,12 @@ class BaseClassifier(object):
             This function trains the classifier on the training set 
         """
         raise NotImplementedError
+    
+    def _get_train_n(self):
+        """
+        This function gives number of classes and number of training samples
+        """
+        raise NotImplementedError
 
     def _predict(self):
         """
@@ -18,7 +24,7 @@ class BaseClassifier(object):
         """
         raise NotImplementedError
     
-    def _get_accuracy(self):
+    def _evaluate(self):
         """
         This function returns the accuracy of predicted label. If predict() has not been called, this function should automatically call predict()
         """
@@ -29,12 +35,17 @@ class BaseClassifier(object):
         This function adds a new annotation.
         """
         self.is_annotated += is_annotated
+    
+
 
     ###### no need to implement these in subclasses ###########
     def train(self):
-        self._train() 
+        self._reset()
+        self._train()
+        self._save_model()
     def predict(self):
         self._predict()
-    def get_accuracy(self):
-        self._get_accuracy()
-        
+    def evaluate(self):
+        self._evaluate()
+    def get_train_n(self):
+        self._get_train_n()
