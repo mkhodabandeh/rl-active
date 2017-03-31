@@ -24,7 +24,10 @@ class LeNet(BaseClassifier):
             self.batch_size = 128
             self.num_classes = 10
             self.epochs = 12
-        
+        self._get_default_data()
+        self._create_model()
+        self.ep = 0
+
     def _preprocess_data(self):
         img_rows, img_cols = 28, 28
         if K.image_data_format() == 'channels_first':
@@ -53,52 +56,38 @@ class LeNet(BaseClassifier):
         print(self.x_train.shape[0], 'train samples')
         print(self.x_test.shape[0], 'test_samples')
 
+    def _get_train_n(self):
+        """
+        This function gives number of classes and number of training samples
+        """
+        return self.x_train.shape[0], self.num_classes
 
-
-    def _get_nondefault_data(self, data):
-        '''
-        Assume data is dict
-        '''
-        self.x_train = data['x_train']
-        self.y_train = data['y_train']
-        self.x_test = data['x_test']
-        self.y_test = data['y_test']
-        self._preprocess_data()
-        print('x_train shape:', x_train.shape)
-        print(x_train.shape[0], 'train samples')
-        print(x_test.shape[0], 'test_samples')
 
 
     def _train(self, data=None):
-        if data is None:
-            print 'Loading data....'
-            self._get_default_data()
-        else:
-            self._get_nondefault_data(data)
         print 'Creating MNIST model...'
-        self._create_model()
-        self.model.fit(self.x_train, self.y_train, batch_size=self.batch_size, epochs=self.epochs,
+        x_train = self.x_train[list(self.is_annotated)]
+        y_train = self.y_train[list(self.is_annotated)]
+        self.model.fit(x_train, y_train, batch_size=self.batch_size, epochs=self.epochs,
                         validation_data=(self.x_test, self.y_test))
 
-
+        return self._predict(x_train)
 
     def _predict(self, data=None):
         print 'Doing Predictions...'
         if data is None:
-            self._get_default_data()
+            return self.model.predict(self.x_test)
         else:
-            self._get_nondefault_data(data)
-        return self.model.predict(self.x_test)
+            return self.model.predict(data)
 
-
-    def _get_accuracy(self, data=None):
+    def _evaluate(self, data=None):
         print 'Getting Accuracy...'
         if data is None:
             self._get_default_data()
         else:
             self._get_nondefault_data(data)
-        return self.model.evaluate(self.x_test, self.y_test)
-
+        score = self.model.evaluate(self.x_test, self.y_test)
+        return score[1]
 
     def _create_model(self):
         self.model = Sequential()
@@ -113,8 +102,16 @@ class LeNet(BaseClassifier):
         self.model.compile(loss=keras.losses.categorical_crossentropy,
                         optimizer=keras.optimizers.Adadelta(), 
                         metrics=['accuracy'])
+    
+    def _reset(self):
+        if self.model:
+            del self.model
 
+        self._create_model()
 
+    def _save_model(self):
+        self.model.save(self.configs['snapshot']+'/lenet-'+self.ep)
+        self.ep+=1
 
 def test_lenet():
     lenet = LeNet()
