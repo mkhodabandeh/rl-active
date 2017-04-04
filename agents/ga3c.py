@@ -50,7 +50,9 @@ class Brain:
 		K.set_session(self.session)
 		K.manual_variable_initialization(True)
 
-		self.model = self._build_model()
+		# self.model = self._build_model()
+                self.phi_s_model = self._build_phi_s_model()
+                self.v_pi_model= self._build_v_pi_model()
 		self.graph = self._build_graph(self.model)
 
 		self.session.run(tf.global_variables_initializer())
@@ -58,18 +60,48 @@ class Brain:
 
 		self.default_graph.finalize()	# avoid modifications
 
-	def _build_model(self):
 
-		l_input = Input( batch_shape=(None, NUM_STATE) )
-		l_dense = Dense(16, activation='relu')(l_input)
-
-		out_actions = Dense(NUM_ACTIONS, activation='softmax')(l_dense)
-		out_value   = Dense(1, activation='linear')(l_dense)
-
-		model = Model(inputs=[l_input], outputs=[out_actions, out_value])
+	def _build_phi_s_model(self):
+		l_input = Input( batch_shape=(None, ) )
+		l_dense = Dense(128, activation='elu')(l_input)
+		l_dense1 = Dense(64, activation='elu')(l_dense)
+		out_state = Dense(STATE_SIZE, activation='elu')(l_dense1)
+		model = Model(inputs=[l_input], outputs=[out_state])
 		model._make_predict_function()	# have to initialize before threading
-
 		return model
+
+	def _build_v_pi_model(self):
+		phi_s = Input( batch_shape=(None, STATE_SIZE) )
+		p_dist_i = Input( batch_shape=(None, NUM_CLASSES) )
+		l_dense1 = Dense(16, activation='elu')(phi_s)
+		l_dense2 = Dense(16, activation='elu')(p_dist_i)
+                l_concat = concatenate([l_dense1, l_dense2], axis=1)
+		out_action = Dense(1, activation='linear')(l_concat)
+		out_value   = Dense(1, activation='linear')(l_dense1)
+		model = Model(inputs=[phi_s, p_dist_i], outputs=[out_action, out_value])
+		model._make_predict_function()	# have to initialize before threading
+		return model
+
+	def _build_phi_s(self, model):
+		s_t = tf.placeholder(tf.float32, shape=(None, NUM_STATE))
+		a_t = tf.placeholder(tf.float32, shape=(None, NUM_ACTIONS))
+		r_t = tf.placeholder(tf.float32, shape=(None, 1)) # not immediate, but discounted n step reward
+		
+		p, v = model(s_t)
+
+		log_prob = tf.log( tf.reduce_sum(p * a_t, axis=1, keep_dims=True) + 1e-10)
+		advantage = r_t - v
+
+		loss_policy = - log_prob * tf.stop_gradient(advantage)									# maximize policy
+		loss_value  = LOSS_V * tf.square(advantage)												# minimize value error
+		entropy = LOSS_ENTROPY * tf.reduce_sum(p * tf.log(p + 1e-10), axis=1, keep_dims=True)	# maximize entropy (regularization)
+
+		loss_total = tf.reduce_mean(loss_policy + loss_value + entropy)
+
+		optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99)
+		minimize = optimizer.minimize(loss_total)
+
+		return s_t, a_t, r_t, minimize
 
 	def _build_graph(self, model):
 		s_t = tf.placeholder(tf.float32, shape=(None, NUM_STATE))
