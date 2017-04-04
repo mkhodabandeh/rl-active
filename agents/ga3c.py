@@ -69,6 +69,9 @@ class Brain:
 
 
 	def _build_phi_s_model(self):
+                # Builds the state graph
+                # Input is an image class probabilities
+                # output is the state vector with size STATE_SIZE
 		l_input = Input( batch_shape=(None, NUM_CLASSES) )
 		l_dense = Dense(128, activation='elu')(l_input)
 		l_dense1 = Dense(64, activation='elu')(l_dense)
@@ -78,6 +81,9 @@ class Brain:
 		return model
 
 	def _build_v_pi_model(self):
+                # Builds the action graph
+                # Inputs are 1. state 2. prob. distribution of an image
+                # outputs are 1. \phi(a|s) and value V(s)
 		phi_s = Input( batch_shape=(None, STATE_SIZE) )
 		p_dist_i = Input( batch_shape=(None, NUM_CLASSES) )
 		l_dense1 = Dense(16, activation='elu')(phi_s)
@@ -90,27 +96,8 @@ class Brain:
 		return model
 
 	def _build_phi_s(self, model):
-		s_t = tf.placeholder(tf.float32, shape=(None, NUM_STATE))
-		a_t = tf.placeholder(tf.float32, shape=(None, NUM_ACTIONS))
-		r_t = tf.placeholder(tf.float32, shape=(None, 1)) # not immediate, but discounted n step reward
-		
-		p, v = model(s_t)
-
-		log_prob = tf.log( tf.reduce_sum(p * a_t, axis=1, keep_dims=True) + 1e-10)
-		advantage = r_t - v
-
-		loss_policy = - log_prob * tf.stop_gradient(advantage)									# maximize policy
-		loss_value  = LOSS_V * tf.square(advantage)												# minimize value error
-		entropy = LOSS_ENTROPY * tf.reduce_sum(p * tf.log(p + 1e-10), axis=1, keep_dims=True)	# maximize entropy (regularization)
-
-		loss_total = tf.reduce_mean(loss_policy + loss_value + entropy)
-
-		optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99)
-		minimize = optimizer.minimize(loss_total)
-
-		return s_t, a_t, r_t, minimize
-
-	def _build_graph(self, model):
+                # Computes the loss A3C loss 
+                # Part of the backward section of the minimize function 
 		s_t = tf.placeholder(tf.float32, shape=(None, NUM_STATE))
 		a_t = tf.placeholder(tf.float32, shape=(None, NUM_ACTIONS))
 		r_t = tf.placeholder(tf.float32, shape=(None, 1)) # not immediate, but discounted n step reward
@@ -132,24 +119,29 @@ class Brain:
 		return s_t, a_t, r_t, minimize
 
         def minimize(self):
-                pass
-            ########### FORWARD ###########
-            # Compute the state
-                # iterate over annotated set {P_i}
-                    # run Phi_s and save it
-                # compute the average_pooling
-            ## we have Phi_s now
+                ########### FORWARD ###########
+                # Compute the state
+                    # iterate over annotated set {P_i}
+                        # run Phi_s and save it
+                    # compute the average_pooling
+                ## we have Phi_s now
             
-            # compute V(s)
+                #1
+#                s_t = tf.Placeholder(tf.float32, shape=(NUM_STATE))
+#                p_i = tf.Placeholder(tf.float32, shape=(NUM_CLASSES))
+#                
+#                for idx in is_annotated:
+#                        s_t = tf.nn.
+                # compute V(s)
 
-            # Iterate over{P_i} 
-                # compute PI(p_i, phi(s))  
-            # Compute softmax of PI
+                # Iterate over{P_i} 
+                    # compute PI(p_i, phi(s))  
+                # Compute softmax of PI
 
-            ########### BACKWARD ##########
-            # Compute dL / dV
-            # iterate over {p_i }
-                # compute dL / ds
+                ########### BACKWARD ##########
+                # Compute dL / dV
+                # iterate over {p_i }
+                    # compute dL / ds
 
 
 	def optimize(self):
