@@ -8,7 +8,14 @@
 #
 # author: Jaromir Janisch, 2017
 
+print 'hihihih'
+import sys
+sys.stdout.flush()
 import numpy as np
+print 'hihihih'
+sys.stdout.flush()
+
+
 import tensorflow as tf
 
 import gym, time, random, threading
@@ -127,6 +134,7 @@ class Brain:
 		return s_t, a_t, r_t, minimize
 
         def minimize(self):
+            pass
             ########### FORWARD ###########
             # Compute the state
                 # iterate over annotated set {P_i}
