@@ -47,6 +47,7 @@ LOSS_ENTROPY = .01 	# entropy coefficient
 
 STATE_SIZE = 128
 NUM_CLASSES = 10
+NUM_DATA = 1000
 #---------
 class Brain:
 	train_queue = [ [], [], [], [], [] ]	# s, a, r, s', s' terminal mask
@@ -59,15 +60,28 @@ class Brain:
 
 		# self.model = self._build_model()
                 self.phi_s_model = self._build_phi_s_model()
-                self.v_pi_model = self._build_v_pi_model()
+                self.v_model = self._build_v_model()
+                self.pi_model = self._build_pi_model()
+                self.termination_train_model = self._build_termination_action_model()
 		self.graph = self._build_graph(self.model)
 
 		self.session.run(tf.global_variables_initializer())
 		self.default_graph = tf.get_default_graph()
 
 		self.default_graph.finalize()	# avoid modifications
+        
 
 
+	def _build_termination_action_model(self):
+                # Builds the state graph
+                # Input is an image class probabilities
+                # output is the state vector with size STATE_SIZE
+		l_input = Input( batch_shape=(None, STATE_SIZE) )
+		l_dense1 = Dense(64, activation='elu')(l_input)
+		out_state = Dense(1, activation='elu')(l_dense1)
+                model = Model(l_input,out_state)
+                # model._make_predict_function()	# have to initialize before threading
+		return model
 	def _build_phi_s_model(self):
                 # Builds the state graph
                 # Input is an image class probabilities
@@ -76,11 +90,18 @@ class Brain:
 		l_dense = Dense(128, activation='elu')(l_input)
 		l_dense1 = Dense(64, activation='elu')(l_dense)
 		out_state = Dense(STATE_SIZE, activation='elu')(l_dense1)
-		model = Model(inputs=[l_input], outputs=[out_state])
-		model._make_predict_function()	# have to initialize before threading
+                model = Model(l_input,out_state)
+                # model._make_predict_function()	# have to initialize before threading
 		return model
 
-	def _build_v_pi_model(self):
+        def _build_v_model(self):
+		phi_s = Input( batch_shape=(None, STATE_SIZE) )
+		l_dense1 = Dense(16, activation='elu')(phi_s)
+		out_value   = Dense(1, activation='linear')(l_dense1)
+		model = Model(inputs=phi_s, outputs=out_value)
+                return model
+
+	def _build_pi_model(self):
                 # Builds the action graph
                 # Inputs are 1. state 2. prob. distribution of an image
                 # outputs are 1. \phi(a|s) and value V(s)
@@ -90,9 +111,7 @@ class Brain:
 		l_dense2 = Dense(16, activation='elu')(p_dist_i)
                 l_concat = concatenate([l_dense1, l_dense2], axis=1)
 		out_action = Dense(1, activation='linear')(l_concat)
-		out_value   = Dense(1, activation='linear')(l_dense1)
-		model = Model(inputs=[phi_s, p_dist_i], outputs=[out_action, out_value])
-		model._make_predict_function()	# have to initialize before threading
+		model = Model(inputs=[p_dist_i, phi_s], outputs=out_action)
 		return model
 
 	def _build_phi_s(self, model):
@@ -118,7 +137,36 @@ class Brain:
 
 		return s_t, a_t, r_t, minimize
 
-        def minimize(self):
+        # def minimize(self, P, is_annotated):
+        def _build_dynamic_model(self, is_annotated):
+
+                # create the network
+                not_annotated = set(range(NUM_DATA)).difference(is_annotated)
+                inputs = []
+                for i in xrange(NUM_DATA):
+                    # inputs.append(tf.placeholder(tf.float32, shape=(None, NUM_CLASSES)))
+                    inputs.append(Input(shape=[NUM_CLASSES]))
+                state_outputs = []
+                for a_i in is_annotated:
+                    state_outputs.append(self.phi_s_model(inputs[a_i]))
+                s_concat = concatenate(state_outputs, axis=0)
+                phi_state = K.mean(s_concat, axis=0)
+                 
+                pi_outputs = []
+                for a_i in not_annotated:
+                    pi_i = self.pi_model([inputs[a_i], phi_state])#PI(a_i|phi(s))
+                    pi_outputs.append(pi_i)
+                termination_action = self.termination_action_model(state)
+                pi_outputs.append(termination_action)
+                action_concat = concatenate(pi_outputs, axis=1)
+
+                out_actions = Dense(len(not_annotated), activation='softmax')(action_concat)
+                out_value = self.v_model(phi_state)
+
+                final_model = Model(inputs=inputs, outputs=[out_actions, out_value])
+                final_model._make_predict_function()
+
+                return final_model
                 ########### FORWARD ###########
                 # Compute the state
                     # iterate over annotated set {P_i}
@@ -126,12 +174,6 @@ class Brain:
                     # compute the average_pooling
                 ## we have Phi_s now
             
-                #1
-#                s_t = tf.Placeholder(tf.float32, shape=(NUM_STATE))
-#                p_i = tf.Placeholder(tf.float32, shape=(NUM_CLASSES))
-#                
-#                for idx in is_annotated:
-#                        s_t = tf.nn.
                 # compute V(s)
 
                 # Iterate over{P_i} 
