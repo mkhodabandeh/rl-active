@@ -127,6 +127,7 @@ class Brain:
 		return s_t, a_t, r_t, minimize
 
         def minimize(self):
+                pass
             ########### FORWARD ###########
             # Compute the state
                 # iterate over annotated set {P_i}
