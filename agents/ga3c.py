@@ -40,6 +40,8 @@ LEARNING_RATE = 5e-3
 LOSS_V = .5			# v loss coefficient
 LOSS_ENTROPY = .01 	# entropy coefficient
 
+STATE_SIZE = 128
+NUM_CLASSES = 10
 #---------
 class Brain:
 	train_queue = [ [], [], [], [], [] ]	# s, a, r, s', s' terminal mask
@@ -52,7 +54,7 @@ class Brain:
 
 		# self.model = self._build_model()
                 self.phi_s_model = self._build_phi_s_model()
-                self.v_pi_model= self._build_v_pi_model()
+                self.v_pi_model = self._build_v_pi_model()
 		self.graph = self._build_graph(self.model)
 
 		self.session.run(tf.global_variables_initializer())
@@ -62,7 +64,7 @@ class Brain:
 
 
 	def _build_phi_s_model(self):
-		l_input = Input( batch_shape=(None, ) )
+		l_input = Input( batch_shape=(None, NUM_CLASSES) )
 		l_dense = Dense(128, activation='elu')(l_input)
 		l_dense1 = Dense(64, activation='elu')(l_dense)
 		out_state = Dense(STATE_SIZE, activation='elu')(l_dense1)
@@ -124,6 +126,26 @@ class Brain:
 
 		return s_t, a_t, r_t, minimize
 
+        def minimize(self):
+            ########### FORWARD ###########
+            # Compute the state
+                # iterate over annotated set {P_i}
+                    # run Phi_s and save it
+                # compute the average_pooling
+            ## we have Phi_s now
+            
+            # compute V(s)
+
+            # Iterate over{P_i} 
+                # compute PI(p_i, phi(s))  
+            # Compute softmax of PI
+
+            ########### BACKWARD ##########
+            # Compute dL / dV
+            # iterate over {p_i }
+                # compute dL / ds
+
+
 	def optimize(self):
 		if len(self.train_queue[0]) < MIN_BATCH:
 			time.sleep(0)	# yield
@@ -145,8 +167,9 @@ class Brain:
 		r = r + GAMMA_N * v * s_mask	# set v to 0 where s_ is terminal state
 		
 		s_t, a_t, r_t, minimize = self.graph
-		self.session.run(minimize, feed_dict={s_t: s, a_t: a, r_t: r})
-
+		# self.session.run(minimize, feed_dict={s_t: s, a_t: a, r_t: r})
+                self.session.run(minimize, feed_dict={s_t: s, a_t: a, r_t: r})
+                
 	def train_push(self, s, a, r, s_):
 		with self.lock_queue:
 			self.train_queue[0].append(s)
