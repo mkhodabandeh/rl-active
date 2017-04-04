@@ -8,11 +8,9 @@
 #
 # author: Jaromir Janisch, 2017
 
-print 'hihihih'
 import sys
 sys.stdout.flush()
 import numpy as np
-print 'hihihih'
 sys.stdout.flush()
 
 
@@ -134,11 +132,7 @@ class Brain:
 		return s_t, a_t, r_t, minimize
 
         def minimize(self):
-<<<<<<< HEAD
                 pass
-=======
-            pass
->>>>>>> ba5800f2468304a13a05784bdb152e8544814243
             ########### FORWARD ###########
             # Compute the state
                 # iterate over annotated set {P_i}
