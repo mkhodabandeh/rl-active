@@ -23,11 +23,11 @@ from keras.layers import *
 from keras import backend as K
 
 #-- constants
-ENV = 'CartPole-v0'
+ENV = 'ActiveLearningEnv-v0'
 
-RUN_TIME = 30
-THREADS = 8
-OPTIMIZERS = 2
+RUN_TIME = 5 
+THREADS = 1
+OPTIMIZERS = 1
 THREAD_DELAY = 0.001
 
 GAMMA = 0.99
@@ -117,7 +117,7 @@ class Brain:
 			assert NUM_DATA-len(is_annotated) > 0, 'Nothing to annotate'
 			a_t = tf.placeholder(tf.float32, shape=(None, NUM_DATA-len(is_annotated)))
 			r_t = tf.placeholder(tf.float32, shape=(None, 1)) # discounted n step reward
-			s_t = [tf.placeholder(tf.float32, shape=(None, NUM_CLASSES) for i in xrange(NUM_DATA)]
+			s_t = [tf.placeholder(tf.float32, shape=(None, NUM_CLASSES)) for i in xrange(NUM_DATA)]
 			
 			log_prob = tf.log( tf.reduce_sum(p * a_t, axis=1, keep_dims=True) + 1e-10)
 			advantage = r_t - v
@@ -234,6 +234,7 @@ class Brain:
 				self.train_queue[4].append(1.)
 
 	def predict(self, state, device):
+		print(state)
                 probs, is_annotated = state
                 tf.reset_default_graph()
                 model = self._build_dynamic_model(is_annotated)
@@ -323,12 +324,12 @@ class Agent:
 class Environment(threading.Thread):
 	stop_signal = False
 
-	def __init__(self, render=False, eps_start=EPS_START, eps_end=EPS_STOP, eps_steps=EPS_STEPS):
+	def __init__(self, render=False, eps_start=EPS_START, eps_end=EPS_STOP, eps_steps=EPS_STEPS, device='/gpu:0'):
 		threading.Thread.__init__(self)
-
+		self.device = device
 		self.render = render
 		self.env = gym.make(ENV)
-		self.agent = Agent(eps_start, eps_end, eps_steps)
+		self.agent = Agent(eps_start, eps_end, eps_steps,device)
 
 	def runEpisode(self):
 		s = self.env.reset()
@@ -378,16 +379,17 @@ class Optimizer(threading.Thread):
 		self.stop_signal = True
 
 #-- main
-env_test = Environment(render=True, eps_start=0., eps_end=0.)
+env_test = Environment(render=True, eps_start=0., eps_end=0., device='/gpu:0')
 NUM_STATE = env_test.env.observation_space.shape[0]
 NUM_ACTIONS = env_test.env.action_space.n
 NONE_STATE = np.zeros(NUM_STATE)
 
 brain = Brain()	# brain is global in A3C
 
-envs = [Environment('/gpu:0') for i in range(THREADS)]
+envs = [Environment(device='/gpu:0') for i in range(THREADS)]
 # envs = [Environment('/gpu:'+str(i%4)) for i in range(THREADS)]
-opts = [Optimizer('/gpu:0') for i in range(OPTIMIZERS)]
+
+opts = [Optimizer(device='/gpu:0') for i in range(OPTIMIZERS)]
 # opts = [Optimizer('/gpu:'+str(i%4)) for i in range(OPTIMIZERS)]
 
 for o in opts:
