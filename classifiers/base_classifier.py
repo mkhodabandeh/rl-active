@@ -50,6 +50,7 @@ class BaseClassifier(object):
 
     ###### no need to implement these in subclasses ###########
     def train(self):
+        # Return: a numpy array of the predictions
         self._reset()
         probs = self._train()
         # self._save_model()

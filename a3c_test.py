@@ -7,10 +7,10 @@ def eprint(*args, **kwargs):
 from keras.models import *
 from keras.layers import *
 from keras import backend as K
-
+import tensorflow as tf
 STATE_SIZE = 128 
 NUM_CLASSES =  10 
-NUM_DATA =2000
+NUM_DATA = 5 
 def _build_dynamic_model(self, is_annotated):
 
         # create the network
@@ -21,11 +21,12 @@ def _build_dynamic_model(self, is_annotated):
             inputs.append(Input(shape=(NUM_CLASSES,)))
         state_outputs = []
         for a_i in is_annotated:
-            state_outputs.append(self.phi_s_model(inputs[a_i]))
-        s_concat = concatenate(state_outputs, axis=0)
-        s_concat = Reshape((1,STATE_SIZE))(s_concat)
+            phi_s_out =self.phi_s_model(inputs[a_i]) 
+            phi_s_out = Reshape((1,STATE_SIZE))(phi_s_out)
+            state_outputs.append(phi_s_out)
+                    
+        s_concat = concatenate(state_outputs, axis=1)
         phi_state = GlobalAveragePooling1D()(s_concat)
-
         pi_outputs = []
         for a_i in not_annotated:
             pi_i = self.pi_model([inputs[a_i], phi_state])#PI(a_i|phi(s))
@@ -85,31 +86,58 @@ def _build_pi_model():
         return model
 
 
+
+
 # from keras.datasets import mnist
 # (x_train, y_train), (x_test, y_test) = mnist.load_data()
-def test_model():
-    import numpy as np
-    class obj:
-        pass
-    self = obj()
-    self.phi_s_model = _build_phi_s_model()
-    self.v_model = _build_v_model()
-    self.pi_model = _build_pi_model()
-    self.termination_action_model = _build_termination_action_model()
+import numpy as np
+class test_model():
+    def __init__(self):
+        self.phi_s_model = _build_phi_s_model()
+        self.v_model = _build_v_model()
+        self.pi_model = _build_pi_model()
+        self.termination_action_model = _build_termination_action_model()
 
-    x = np.random.rand(NUM_DATA, NUM_CLASSES)
-    is_annotated = set([0,3,5])
-    def func(arr):
-        s = sum(arr)
-        return [i*0.1/s for i in arr]
-    x = np.apply_along_axis(func, 1,x) 
-    model = _build_dynamic_model(self, is_annotated)
-    return x, model
+    def predict(self, s):
+        probs, is_annotated = s
+        # tf.reset_default_graph()
+        model = _build_dynamic_model(self, is_annotated)
+        # self.session.run(tf.global_variables_initializer())
+                        
+        #with self.default_graph.as_default():
+        print(probs[0].reshape(1,10).shape)
+        p, v = model.predict([probs[i].reshape(1,10) for i in xrange(probs.shape[0])])
+        
+        return p, v
+
+    # x = np.random.rand(NUM_DATA, NUM_CLASSES)
+    # is_annotated = set([0,3,5])
+    # def func(arr):
+        # s = sum(arr)
+        # return [i*0.1/s for i in arr]
+    # x = np.apply_along_axis(func, 1,x) 
+    # model = _build_dynamic_model(self, is_annotated)
+    # return x, model
 
 if __name__=='__main__':
-    x, model = test_model()
-    
-    from keras.utils.layer_utils import print_summary
-    print_summary(model)
-    model.compile(optimizer='rmsprop', loss='binary_crossentropy', loss_weights=[1., 0.2])
-    
+    # x, model = test_model()
+    m = test_model()
+    x = np.random.rand(NUM_DATA, NUM_CLASSES)
+    is_annotated = set([0,3])
+    p, v = m.predict((x, is_annotated)) 
+    print(NUM_DATA)
+    print(len(is_annotated))
+    print('p',p)
+    print('v',v)
+    p, v = m.predict((x, is_annotated)) 
+    print('p',p)
+    print('v',v)
+    is_annotated = set([0,3, 1])
+    p, v = m.predict((x, is_annotated)) 
+    print(NUM_DATA)
+    print(len(is_annotated))
+    print('p',p)
+    print('v',v)
+    # from keras.utils.layer_utils import print_summary
+    # print_summary(model)
+    # model.compile(optimizer='rmsprop', loss='binary_crossentropy', loss_weights=[1., 0.2])

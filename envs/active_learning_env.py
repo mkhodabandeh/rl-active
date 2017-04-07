@@ -53,7 +53,7 @@ class ActiveLearningEnv(gym.Env):
                                   spaces.MultiBinary(1) # retrain the classifier using the new data 
                                    )) #TODO: verify this 
 	self.is_annotated = set() 
-        print self.n, self.k
+        print('number of instances:', self.n, 'number of classes:',self.k)
         self.probs = np.zeros((self.n,self.k))        
         self.best_val = 0
        	self.new_annotations = 0 
@@ -67,7 +67,7 @@ class ActiveLearningEnv(gym.Env):
 
     def _compute_reward(self, acc_gain=None):
 	#TODO: define reward
-	if acc_gain:
+)	if acc_gain:
 	    return acc_gain
 	else:
             return -1
@@ -91,7 +91,7 @@ class ActiveLearningEnv(gym.Env):
             self.is_annotated.add(label_i)
             reward = self._compute_reward()
         done = len(self.is_annotated) == self.max_annotations
-        return (self.probs, self.is_annotated), reward, done, None 
+        return (self.probs.copy(), self.is_annotated.copy()), reward, done, None 
         
 
     def _reset(self): 
