@@ -115,7 +115,7 @@ class Brain:
 			p, v = model(inputs)
 
 			assert NUM_DATA-len(is_annotated) > 0, 'Nothing to annotate'
-			a_t = tf.placeholder(tf.float32, shape=(None, NUM_DATA-len(is_annotated))
+			a_t = tf.placeholder(tf.float32, shape=(None, NUM_DATA-len(is_annotated)))
 			r_t = tf.placeholder(tf.float32, shape=(None, 1)) # discounted n step reward
 			s_t = [tf.placeholder(tf.float32, shape=(None, NUM_CLASSES) for i in xrange(NUM_DATA)]
 			
