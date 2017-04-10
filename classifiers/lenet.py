@@ -25,6 +25,7 @@ class LeNet(BaseClassifier):
             self.configs = {'snapshot':'./snapshots/'}
             self.batch_size = 128
             self.epochs = 2
+	self.is_annotated = set() 
         self._get_default_data()
         self._create_model()
         self.ep = 0
@@ -123,10 +124,10 @@ class LeNet(BaseClassifier):
 
 def test_lenet():
     lenet = LeNet()
-    lenet._train()
+    # lenet._train()
     pred_labels = lenet._predict()
     print pred_labels.shape
-    accuracy = lenet._get_accuracy()
+    accuracy = lenet._evaluate()
     print accuracy
 
 if __name__ == '__main__':
