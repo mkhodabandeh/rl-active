@@ -17,7 +17,9 @@ sys.stdout.flush()
 import tensorflow as tf
 
 import gym, time, random, threading
-
+from gym.envs.registration import  register
+# from envs.active_learning_env import ActiveLearningEnv
+# register(id=ENV, entry_point='envs:ActiveLearningEnv')
 from keras.models import *
 from keras.layers import *
 from keras import backend as K
@@ -48,7 +50,7 @@ LOSS_ENTROPY = .01 	# entropy coefficient
 
 STATE_SIZE = 128
 NUM_CLASSES = 10
-NUM_DATA = 1000
+NUM_DATA = 20 
 #---------
 class Brain:
 	train_queue = [ [], [], [], [], [] ]	# s, a, r, s', s' terminal mask
@@ -60,11 +62,11 @@ class Brain:
 		K.manual_variable_initialization(True)
 
 		# self.model = self._build_model()
+                # tf.reset_default_graph()
                 self.phi_s_model = self._build_phi_s_model()
                 self.v_model = self._build_v_model()
                 self.pi_model = self._build_pi_model()
-                self.termination_train_model = self._build_termination_action_model()
-
+                self.termination_action_model = self._build_termination_action_model()
 		self.session.run(tf.global_variables_initializer())
 		self.default_graph = tf.get_default_graph()
 
@@ -74,24 +76,31 @@ class Brain:
 		# self.default_graph.finalize()	# avoid modifications
         
 
-        def _build_dynamic_model(self, is_annotated):
+        def _build_dynamic_model(self, is_annotated, device):
                 # create the network
                 not_annotated = set(range(NUM_DATA)).difference(is_annotated)
                 inputs = []
+                # with tf.device(device):
+                # tf.reset_default_graph()
                 for i in xrange(NUM_DATA):
                     # inputs.append(tf.placeholder(tf.float32, shape=(None, NUM_CLASSES)))
-                    inputs.append(Input(shape=(NUM_CLASSES,),name='input_prob_{}_'.format(i)))
+                    inputs.append(Input(shape=(NUM_CLASSES,)))
+
                 state_outputs = []
                 for a_i in is_annotated:
-                    state_outputs.append(self.phi_s_model(inputs[a_i]))
-                s_concat = concatenate(state_outputs, axis=0, name='concatenate_phi_s')
-                s_concat = Reshape((1,STATE_SIZE), name='resahpe_phi_s')(s_concat)
+                    phi_s_out =self.phi_s_model(inputs[a_i]) 
+                    phi_s_out = Reshape((1,STATE_SIZE))(phi_s_out)
+                    state_outputs.append(phi_s_out)
+                s_concat = concatenate(state_outputs, axis=1)
                 phi_state = GlobalAveragePooling1D(name='global_max_pool_phi_s')(s_concat)
                 
                 #TODO We could probably have phi_state for not_annotated instances
 
                 pi_outputs = []
                 for a_i in not_annotated:
+                    # print inputs[a_i]
+                    # print phi_state
+                    # print self.pi_model
                     pi_i = self.pi_model([inputs[a_i], phi_state])#PI(a_i|phi(s))
                     pi_outputs.append(pi_i)
 
@@ -108,31 +117,32 @@ class Brain:
 
         def _build_graph(self, state, device='/gpu:0'):
         
-		with tf.device(device): 
-			probs, is_annotated = state
-			tf.reset_default_graph()
-			model = self._build_dynamic_model(is_annotated)
-			inputs = [tf.placeholder(tf.float32, shape=(None, NUM_CLASSES), name='input_prob_tensor_{}_'.format(_)) for _ in NUM_DATA]
-			p, v = model(inputs)
+		# with tf.device(device): 
+                probs, is_annotated = state
+                # tf.reset_default_graph()
+                model = self._build_dynamic_model(is_annotated, device)
+                inputs = [tf.placeholder(tf.float32, shape=(None, NUM_CLASSES), name='input_prob_tensor_{}_'.format(_)) for _ in xrange(NUM_DATA)]
+                p, v = model(inputs)
 
-			assert NUM_DATA-len(is_annotated) > 0, 'Nothing to annotate'
-			a_t = tf.placeholder(tf.float32, shape=(None, NUM_DATA-len(is_annotated)), name='a_t')
-			r_t = tf.placeholder(tf.float32, shape=(None, 1), name='r_t') # discounted n step reward
-			s_t = [tf.placeholder(tf.float32, shape=(None, NUM_CLASSES), name='s_t_{}_'.format(i)) for i in xrange(NUM_DATA)]
-			
-			log_prob = tf.log( tf.reduce_sum(p * a_t, axis=1, keep_dims=True) + 1e-10)
-			advantage = r_t - v
+                assert NUM_DATA-len(is_annotated) > 0, 'Nothing to annotate'
+                a_t = tf.placeholder(tf.float32, shape=(None, 1+NUM_DATA-len(is_annotated)), name='a_t')
+                r_t = tf.placeholder(tf.float32, shape=(None, 1), name='r_t') # discounted n step reward
+                # s_t = [tf.placeholder(tf.float32, shape=(None, NUM_CLASSES), name='s_t_{}_'.format(i)) for i in xrange(NUM_DATA)]
 
-			loss_policy = - log_prob * tf.stop_gradient(advantage)	# maximize policy
-			loss_value  = LOSS_V * tf.square(advantage)  # minimize value error
-			entropy = LOSS_ENTROPY * tf.reduce_sum(p * tf.log(p + 1e-10), axis=1, keep_dims=True)	# maximize entropy (regularization)
+                log_prob = tf.log( tf.reduce_sum(p * a_t, axis=1, keep_dims=True) + 1e-10, name='log_prob')
+                advantage = r_t - v
 
-			loss_total = tf.reduce_mean(loss_policy + loss_value + entropy)
+                loss_policy = - log_prob * tf.stop_gradient(advantage)	# maximize policy
+                loss_value  = LOSS_V * tf.square(advantage)  # minimize value error
+                entropy = LOSS_ENTROPY * tf.reduce_sum(p * tf.log(p + 1e-10), axis=1, keep_dims=True, name='entropy')	# maximize entropy (regularization)
 
-			optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99)
-			minimize = optimizer.minimize(loss_total)
+                loss_total = tf.reduce_mean(loss_policy + loss_value + entropy, name='loss_total')
 
-			return s_t, a_t, r_t, minimize
+                optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99, name='MyRMSProp')
+                #tf.initialize_variables(optimizer)
+                minimize = optimizer.minimize(loss_total)
+
+                return inputs, a_t, r_t, minimize
 
                     
         def _build_predict_graph(self, state):
@@ -144,8 +154,8 @@ class Brain:
                 # Input is an image class probabilities
                 # output is the state vector with size STATE_SIZE
                 l_input = Input( shape=(STATE_SIZE,), name='input_termination_action_')
-                l_dense1 = Dense(64, activation='elu')(l_input)
-                out_state = Dense(1, activation='elu')(l_dense1)
+                l_dense1 = Dense(64, activation='elu', name='dense1_termination_action')(l_input)
+                out_state = Dense(1, activation='elu', name='out_state_')(l_dense1)
                 model = Model(inputs=l_input,outputs=out_state)
                 # model._make_predict_function()	# have to initialize before threading
                 return model
@@ -154,9 +164,9 @@ class Brain:
                 # Builds the state graph
                 # Input is an image class probabilities
                 # output is the state vector with size STATE_SIZE
-                l_input = Input(shape=(NUM_CLASSES,) )
-                l_dense = Dense(128, activation='elu')(l_input)
-                l_dense1 = Dense(64, activation='elu')(l_dense)
+                l_input = Input(shape=(None, NUM_CLASSES) )
+                l_dense = Dense(128, activation='elu',name='dens1_phi_s')(l_input)
+                l_dense1 = Dense(64, activation='elu',name='dens2_phi_s')(l_dense)
                 out_state = Dense(STATE_SIZE, activation='elu')(l_dense1)
                 model = Model(inputs=l_input,outputs=out_state)
                 # model._make_predict_function()	# have to initialize before threading
@@ -164,7 +174,7 @@ class Brain:
 
         def _build_v_model(self):
                 phi_s = Input( shape=(STATE_SIZE,) )
-                l_dense1 = Dense(16, activation='elu')(phi_s)
+                l_dense1 = Dense(16, activation='elu', name='dens1_v_')(phi_s)
                 out_value   = Dense(1, activation='linear')(l_dense1)
                 model = Model(inputs=phi_s, outputs=out_value)
                 return model
@@ -175,10 +185,10 @@ class Brain:
                 # outputs are 1. \phi(a|s) and value V(s)
                 phi_s = Input(shape=(STATE_SIZE,) )
                 p_dist_i = Input( shape= (NUM_CLASSES,) )
-                l_dense1 = Dense(32, activation='elu')(phi_s)
-                l_dense2 = Dense(16, activation='elu')(p_dist_i)
-                l_concat = concatenate([l_dense1, l_dense2], axis=1)
-                out_action = Dense(1, activation='linear')(l_concat)
+                l_dense1 = Dense(32, activation='elu', name='dense1_pi_')(phi_s)
+                l_dense2 = Dense(16, activation='elu', name='dense2_pi_')(p_dist_i)
+                l_concat = concatenate([l_dense1, l_dense2], axis=1, name='concat_pi_model')
+                out_action = Dense(1, activation='linear', name='out_action_')(l_concat)
                 model = Model(inputs=[p_dist_i, phi_s], outputs=out_action)
                 return model
 
@@ -204,11 +214,12 @@ class Brain:
                 # so we have to do it one by one, unless we change the implementation ...
                 
                 for i in xrange(len(a_batch)):
+                        # print('ON BATCH:', i)
                         s = s_batch[i]
                         a = a_batch[i]
                         assert type(s[1])==set
                         is_annotated = s[1]
-                        num_actions = NUM_DATA-len(is_annotated)
+                        num_actions = 1+NUM_DATA-len(is_annotated)
                         a_cats = np.zeros(num_actions)	# turn action into one-hot representation
                         a_cats[a] = 1 
                         a = a_cats
@@ -217,14 +228,21 @@ class Brain:
                         s_mask = s_mask_batch[i]
 
 
-                        v = self.predict_v(s_, device)
+                        # tf.reset_default_graph()
+                        # v = self.predict_v(s_, device)
+                        v = np.array([10])
                         r = r + GAMMA_N * v * s_mask	# set v to 0 where s_ is terminal state
                         
+                        # tf.reset_default_graph()
                         s_t, a_t, r_t, minimize = self._build_graph(s, device)
                         probs,is_annotated = s
-                        feed_dict = {s_t[i]:probs[i].reshape((1,NUM_CLASSES)) for i in xrange(probs.shape[0])}
-                        feed_dict[a_t] = a
-                        feed_dict[r_t] = r
+                        # print 'OH', s_t[0]
+                        # print 'PROBS', probs[0].reshape(1, -1) 
+                        feed_dict = {s_t[i]:probs[i].reshape(1,-1) for i in xrange(probs.shape[0])}
+                        feed_dict[a_t] = a.reshape(1,-1)
+                        feed_dict[r_t] = r.reshape(1,-1)
+                        init_op = tf.global_variables_initializer()
+                        self.session.run(init_op )
                         self.session.run(minimize, feed_dict=feed_dict)
                 
 	def train_push(self, s, a, r, s_):
@@ -243,12 +261,12 @@ class Brain:
 	def predict(self, state, device):
 		# print(state)
                 probs, is_annotated = state
-                tf.reset_default_graph()
-                model = self._build_dynamic_model(is_annotated)
-                self.session.run(tf.global_variables_initializer())
+                # tf.reset_default_graph()
+                model = self._build_dynamic_model(is_annotated, device)
+                # self.session.run(tf.global_variables_initializer())
                                 
 		with self.default_graph.as_default():
-			p, v = self.model.predict([probs[i] for i in xrange(probs.shape[0])])
+			p, v = model.predict([probs[i].reshape(1,NUM_CLASSES) for i in xrange(probs.shape[0])])
 			return p, v
 
 	def predict_p(self, s, device):
@@ -278,12 +296,12 @@ class Agent:
 	def act(self, s):
 		eps = self.getEpsilon()			
 		global frames; frames = frames + 1
-
+                num_actions = NUM_DATA - len(s[1])+1
 		if random.random() < eps:
-			return random.randint(0, NUM_ACTIONS-1)
+			return random.randint(0, num_action-1)
 
 		else:
-			s = np.array([s])
+			# s = np.array([s])
 			p = brain.predict_p(s, self.device)[0]
 
 			# a = np.argmax(p)
@@ -387,46 +405,54 @@ class Optimizer(threading.Thread):
 
 #-- main
 # env_test = Environment(render=True, eps_start=0., eps_end=0., device='/gpu:0')
+# env_test = Environment(render=True, eps_start=0., eps_end=0., device='/gpu:0')
+
+
 # NUM_ACTIONS = env_test.env.action_space.n
 NONE_STATE = np.zeros(STATE_SIZE)
 
 brain = Brain()	# brain is global in A3C
 
-def gen_s():
-    s = np.random.rand(NUM_DATA, NUM_CLASSES) 
-    for i in xrange(s.shape[0]):
-        s[i] = s[i]/sum(s[i])
-    return s
+# def gen_s():
+    # s = np.random.rand(NUM_DATA, NUM_CLASSES) 
+    # for i in xrange(s.shape[0]):
+        # s[i] = s[i]/sum(s[i])
+    # return s
 
-for i in xrange(8):
-    s,r,a,s_ = (gen_s(), set([0])), -1, 2, (gen_s(), set([0,2]))
-    brain.train_push(s,r,a,s_)
-brain.optimize('/gpu:0')
-# envs = [Environment(device='/gpu:0') for i in range(THREADS)]
+# for i in xrange(8):
+    # s,r,a,s_ = (gen_s(), set([0, 1])), -1, 2, (gen_s(), set([0,1,2]))
+    # brain.train_push(s,r,a,s_)
+
+# tf.reset_default_graph()
+# a = brain._build_dynamic_model(s[1], '/gpu:0')
+# a = brain._build_graph(s,'/gpu:0')
+# a = brain.predict(s, '/gpu:0')
+# brain.optimize('/gpu:0')
+envs = [Environment(device='/gpu:0') for i in range(THREADS)]
 # envs = [Environment('/gpu:'+str(i%4)) for i in range(THREADS)]
 
-# opts = [Optimizer(device='/gpu:0') for i in range(OPTIMIZERS)]
+opts = [Optimizer(device='/gpu:0') for i in range(OPTIMIZERS)]
 # opts = [Optimizer('/gpu:'+str(i%4)) for i in range(OPTIMIZERS)]
 
-# op = Optimizer(device='/gpu:0')
+op = Optimizer(device='/gpu:0')
 
-# for o in opts:
-	# o.start()
+for o in opts:
+        o.start()
 
-# for e in envs:
-	# e.start()
+for e in envs:
+        e.start()
 
-# time.sleep(RUN_TIME)
+time.sleep(RUN_TIME)
 
-# for e in envs:
-	# e.stop()
-# for e in envs:
-	# e.join()
+for e in envs:
+        e.stop()
+for e in envs:
+        e.join()
 
-# for o in opts:
-	# o.stop()
-# for o in opts:
-	# o.join()
+for o in opts:
+        o.stop()
+for o in opts:
+        o.join()
 
 print("Training finished")
 # env_test.run()

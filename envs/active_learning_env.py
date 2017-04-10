@@ -67,7 +67,7 @@ class ActiveLearningEnv(gym.Env):
 
     def _compute_reward(self, acc_gain=None):
 	#TODO: define reward
-)	if acc_gain:
+	if acc_gain:
 	    return acc_gain
 	else:
             return -1
