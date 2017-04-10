@@ -9,7 +9,7 @@ from keras.layers import *
 from keras import backend as K
 import tensorflow as tf
 STATE_SIZE = 128 
-NUM_CLASSES =  10 
+NUM_CLASSES = 10
 NUM_DATA = 5 
 def _build_dynamic_model(self, is_annotated):
 
@@ -24,7 +24,7 @@ def _build_dynamic_model(self, is_annotated):
             phi_s_out =self.phi_s_model(inputs[a_i]) 
             phi_s_out = Reshape((1,STATE_SIZE))(phi_s_out)
             state_outputs.append(phi_s_out)
-                    
+            
         s_concat = concatenate(state_outputs, axis=1)
         phi_state = GlobalAveragePooling1D()(s_concat)
         pi_outputs = []
@@ -42,6 +42,8 @@ def _build_dynamic_model(self, is_annotated):
         final_model._make_predict_function()
 
         return final_model
+
+def _build_alexnet_model():
 
 def _build_termination_action_model():
         # Builds the state graph
