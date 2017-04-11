@@ -1,7 +1,9 @@
 from lenet import LeNet
+from lenet_tflearn import LeNetTF
+from cifar10 import Cifar10 
 
 class ClassifierFactory(object):
-    CLASSIFIERS = [LeNet]
+    CLASSIFIERS = [LeNet, LeNetTF, Cifar10]
 
     @classmethod
     def get_classifier(self, classifier_name, database_name, config_path):

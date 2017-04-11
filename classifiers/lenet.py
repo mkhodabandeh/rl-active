@@ -5,6 +5,7 @@ from keras.layers import Dense, Dropout, Flatten
 from keras.layers import Conv2D, MaxPooling2D
 from keras import backend as K
 import yaml
+import tensorflow as tf
 
 class LeNet(BaseClassifier):
     '''
@@ -17,6 +18,7 @@ class LeNet(BaseClassifier):
     to convert input to desired format, and sets training parameters.
     '''
     name = 'LeNet'
+    count = 0
     def __init__(self, config_path=None):
         if config_path:
             self.configs = yaml.load(open(config_path))
@@ -84,6 +86,8 @@ class LeNet(BaseClassifier):
 
     def _predict(self, data=None):
         print 'Doing Predictions...'
+        # K.set_session(self.sess)
+        # with self.sess.as_default():
         if data is None:
             return self.model.predict(self.x_test)
         else:
@@ -99,19 +103,27 @@ class LeNet(BaseClassifier):
         return score[1]
 
     def _create_model(self):
-        self.model = Sequential()
-        self.model.add(Conv2D(32, kernel_size=(3, 3), activation='relu', input_shape=self.input_shape))
-        self.model.add(Conv2D(64, (3, 3), activation='relu'))
-        self.model.add(MaxPooling2D(pool_size=(2,2)))
-        self.model.add(Dropout(0.25))
-        self.model.add(Flatten())
-        self.model.add(Dense(128, activation='relu'))
-        self.model.add(Dropout(0.5))
-        self.model.add(Dense(self.num_classes, activation='softmax'))
-        self.model.compile(loss=keras.losses.categorical_crossentropy,
-                        optimizer=keras.optimizers.Adadelta(), 
-                        metrics=['accuracy'])
-    
+        # print 'GRAAAAPH', g
+        # self.sess = tf.Session()
+        self.graph = tf.Graph()
+        self.sess = tf.Session(graph=self.graph)
+        # print '----------------------'+str(self.sess)
+        K.set_session(self.sess)
+        with self.graph.as_default() as g:
+            self.model = Sequential()
+            self.model.add(Conv2D(32, kernel_size=(3, 3), activation='relu', input_shape=self.input_shape, name="first_conv2d_lenet"))
+            self.model.add(Conv2D(64, (3, 3), activation='relu'))
+            self.model.add(MaxPooling2D(pool_size=(2,2)))
+            self.model.add(Dropout(0.25))
+            self.model.add(Flatten())
+            self.model.add(Dense(128, activation='relu'))
+            self.model.add(Dropout(0.5))
+            self.model.add(Dense(self.num_classes, activation='softmax', name='MySoftmax_'+str(LeNet.count)))
+            LeNet.count+= 1
+            self.model.compile(loss=keras.losses.categorical_crossentropy,
+                            optimizer=keras.optimizers.Adadelta(), 
+                            metrics=['accuracy'])
+
     def _reset(self):
         if self.model:
             del self.model
@@ -127,8 +139,8 @@ def test_lenet():
     # lenet._train()
     pred_labels = lenet._predict()
     print pred_labels.shape
-    accuracy = lenet._evaluate()
-    print accuracy
+    
+    # print accuracy
 
 if __name__ == '__main__':
     test_lenet()

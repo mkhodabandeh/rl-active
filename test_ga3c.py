@@ -26,7 +26,8 @@ from keras import backend as K
 
 #-- constants
 ENV = 'ActiveLearningEnv-v0'
-
+gym.make(ENV)
+# exit()
 RUN_TIME = 5 
 THREADS = 1
 OPTIMIZERS = 1
