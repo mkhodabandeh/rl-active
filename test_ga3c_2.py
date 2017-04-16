@@ -26,8 +26,7 @@ from keras import backend as K
 
 #-- constants
 ENV = 'ActiveLearningEnv-v0'
-gym.make(ENV)
-# exit()
+
 RUN_TIME = 5 
 THREADS = 1
 OPTIMIZERS = 1
@@ -297,7 +296,7 @@ class Agent:
 	def act(self, s):
 		eps = self.getEpsilon()			
 		global frames; frames = frames + 1
-                num_actions = NUM_DATA - len(s[1])+1
+                    num_actions = NUM_DATA - len(s[1])+1
 		if random.random() < eps:
 			return random.randint(0, num_action-1)
 
