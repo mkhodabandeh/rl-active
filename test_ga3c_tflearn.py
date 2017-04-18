@@ -20,7 +20,7 @@ import gym, time, random, threading
 from gym.envs.registration import  register
 # from envs.active_learning_env import ActiveLearningEnv
 # register(id=ENV, entry_point='envs:ActiveLearningEnv')
-from tflearn.layers.core import *
+from tflearn.layers import *
 import tflearn
 
 #-- constants
@@ -62,7 +62,7 @@ class Brain:
 
 		# self.model = self._build_model()
                 # tf.reset_default_graph()
-                self.phi_s_model = self._build_phi_s_model()
+                #self.phi_s_model = self._build_phi_s_model()
                 self.v_model = self._build_v_model()
                 self.pi_model = self._build_pi_model()
                 self.termination_action_model = self._build_termination_action_model()
@@ -86,10 +86,15 @@ class Brain:
                     inputs.append(input_data(shape=(None, NUM_CLASSES)))
 
                 state_outputs = []
-                for a_i in is_annotated:
-                    phi_s_out =self.phi_s_model(inputs[a_i]) 
-                    #phi_s_out = reshape(phi_s_out, [1,STATE_SIZE])
-                    state_outputs.append(phi_s_out)
+                    #share weights between different inputs
+                with tf.contrib.framework.arg_scope([tflearn.variables.variable]) as scope:
+                    iter_id = 1
+                    for a_i in is_annotated:
+                        phi_s_out =self._build_phi_s_model(inputs[a_i])
+                        state_outputs.append(phi_s_out)
+                        tf.get_variable_scope().reuse_variables()
+                        print 'ITER: '+ str(iter_id)
+                        iter_id = iter_id + 1
                 #s_concat = merge(state_outputs, 'mean',axis=1)
                 phi_state = merge(state_outputs, 'mean',axis=1)
                 #phi_state = GlobalAveragePooling1D(name='global_max_pool_phi_s')(s_concat)
@@ -107,11 +112,12 @@ class Brain:
                 termination_action = self.termination_action_model(phi_state)
                 pi_outputs.append(termination_action)
 
-                action_concat = concatenate(pi_outputs, axis=1, name='concatenate_PIs')
-                out_actions = Activation('softmax',name='action_output')(action_concat)
+                action_concat = merge(pi_outputs, 'concat', axis=1, name='concatenate_PIs')
+                out_actions = tflearn.activations.sotfmax(action_concat, name='action_output')
                 out_value = self.v_model(phi_state)
-                final_model = Model(inputs=inputs, outputs=[out_actions, out_value])
-                final_model._make_predict_function()
+                #TODO:Check with mehran about merge type
+                final_model = tflearn.merge([out_actions, out_value], 'elemwise_sum')
+                #final_model._make_predict_function()
 
                 return final_model
 
@@ -157,30 +163,33 @@ class Brain:
                 l_dense1 = fully_connected(l_input, 64, activation='elu', name='dense1_termination_action')
                 out_state = fully_connected(l_dense1, 1, activation='elu', name='out_state_')
                 #model = Model(inputs=l_input,outputs=out_state)
-                model = tflearn.DNN(out_state)
+                model = tflearn.DNN(out_state, session=self.session)
                 # model._make_predict_function()	# have to initialize before threading
                 return model
+                #return out_state
 
-        def _build_phi_s_model(self):
+        def _build_phi_s_model(self, l_input):
                 # Builds the state graph
                 # Input is an image class probabilities
                 # output is the state vector with size STATE_SIZE
-                l_input = input_data(shape=(None, NUM_CLASSES) )
-                l_dense = fully_connected(l_input, 128, activation='elu',name='dens1_phi_s')
-                l_dense1 = fully_connected(l_dense, 64, activation='elu',name='dens2_phi_s')
+                #l_input = input_data(shape=(None, NUM_CLASSES) )
+                l_dense = fully_connected(l_input, 128, activation='elu',name='dens1_phi_s', scope='dens1_phi_s')
+                l_dense1 = fully_connected(l_dense, 64, activation='elu',name='dens2_phi_s', scope='dens2_phi_s')
                 out_state = fully_connected(l_dense1, STATE_SIZE, activation='elu')
                 #model = Model(inputs=l_input,outputs=out_state)
-                model = tflearn.DNN(out_state)
+                #model = tflearn.DNN(out_state, session=self.session)
                 # model._make_predict_function()	# have to initialize before threading
-                return model
+                #return model
+                return out_state
 
         def _build_v_model(self):
                 #phi_s = Input( shape=(STATE_SIZE,) )
                 phi_s = input_data( shape=(None, STATE_SIZE))
                 l_dense1 = fully_connected(phi_s, 16, activation='elu', name='fc1_v')
                 out_value = fully_connected(l_dense1, 1, activation='linear')
-                model = tflearn.DNN(out_value)
+                model = tflearn.DNN(out_value, session=self.session)
                 return model
+                #return out_value
 
         def _build_pi_model(self):
                 # Builds the action graph
@@ -192,9 +201,9 @@ class Brain:
                 l_dense2 = fully_connected(p_dist_i, 16, activation='elu', name='dense2_pi_')
                 l_concat = merge([l_dense1, l_dense2], 'concat', axis=1, name='concat_pi_model')
                 out_action = fully_connected(l_concat, 1, activation='linear', name='out_action_')
-                model = tflearn.DNN(out_action)
+                model = tflearn.DNN(out_action, session=self.session)
+                #return out_action
                 return model
-
 
 	def optimize(self, device):
 		if len(self.train_queue[0]) < MIN_BATCH:
