@@ -244,6 +244,7 @@ class Brain:
                         feed_dict = {s_t[i]:probs[i].reshape(1,-1) for i in xrange(probs.shape[0])}
                         feed_dict[a_t] = a.reshape(1,-1)
                         feed_dict[r_t] = r.reshape(1,-1)
+                        #TODO: check if this thing initializes all the parameters? how to check? -> assert  "phi_s_model.fc1.weights before  this line of code" == "after"  
                         init_op = tf.global_variables_initializer()
                         self.session.run(init_op )
                         self.session.run(minimize, feed_dict=feed_dict)

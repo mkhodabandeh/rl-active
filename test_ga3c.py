@@ -146,8 +146,8 @@ class Brain:
                 return inputs, a_t, r_t, minimize
 
                     
-        def _build_predict_graph(self, state):
-                p_a, v = model(inputs)
+        # def _build_predict_graph(self, state):
+                # p_a, v = model(inputs)
                   
 
         def _build_termination_action_model(self):
