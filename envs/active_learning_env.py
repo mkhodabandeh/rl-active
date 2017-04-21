@@ -73,8 +73,8 @@ class ActiveLearningEnv(gym.Env):
             return -1
 
     def _step(self, action):
-        label_i, do_train = action #action is a Tuple ( n, binary)
-	if do_train[0] == 1: 
+        label_i, do_train = action #action is a Tuple ( int, boolean)
+	if do_train == True: 
 	    self.classifier.set_annotations(self.is_annotated)
             self.probs = self.classifier.train()
             acc = self.classifier.evaluate()
