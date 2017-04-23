@@ -12,6 +12,7 @@ import numpy as np
 import yaml
 import tensorflow as tf
 
+NUM_DATA = 20
 class LeNetTF(BaseClassifier):
     '''
     Inspired from keras implementation of LeNet:
@@ -38,6 +39,8 @@ class LeNetTF(BaseClassifier):
         self.ep = 0
         
     def _preprocess_data(self):
+        #only a portion of the data is used for training the RL agent
+        self.x_train = self.x_train[:NUM_DATA, ...]
         self.x_train = self.x_train.reshape([-1, 28, 28, 1])
         self.x_test = self.x_test.reshape([-1, 28, 28, 1])
     
@@ -47,7 +50,7 @@ class LeNetTF(BaseClassifier):
         self.num_classes = 10
 
         self.x_train, self.y_train, self.x_test, self.y_test = mnist.load_data(one_hot=True)
-
+        
         self._preprocess_data()
 
         print('x_train shape:', self.x_train.shape)
@@ -75,14 +78,14 @@ class LeNetTF(BaseClassifier):
         with self.sess.as_default():
             with self.graph.as_default() as g:
                 self.model.fit({'input': x_train}, {'target': y_train}, n_epoch=10, validation_set=({'input': self.x_test}, {'target': self.y_test}), snapshot_step=100, show_metric=True, run_id='convnet_mnist')
-                return self._predict(x_train)
+                return self._predict(self.x_train)
 
     def _predict(self, data=None):
         print('Doing Predictions...')
         with self.sess.as_default():
             with self.graph.as_default() as g:
                 if data is None:
-                    return np.array(self.model.predict(self.x_test))
+                    return np.array(self.model.predict(self.x_train))
                 else:
                     return np.array(self.model.predict(data))
 

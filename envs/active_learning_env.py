@@ -73,12 +73,13 @@ class ActiveLearningEnv(gym.Env):
             return -1
 
     def _step(self, action):
-        label_i, do_train = action #action is a Tuple ( n, binary)
-	if do_train[0] == 1: 
+        label_i, do_train = action #action is a Tuple ( int, boolean)
+	if do_train == True: 
 	    self.classifier.set_annotations(self.is_annotated)
             self.probs = self.classifier.train()
             acc = self.classifier.evaluate()
-
+            acc = acc[0]
+            # print acc
 	    # save best validation
 	    acc_gain = acc - self.previous_acc 
             if acc > self.best_val:
@@ -98,12 +99,19 @@ class ActiveLearningEnv(gym.Env):
         print "+++++++++++++++++++++++INSIDE RESET"
         self.classifier = ClassifierFactory.get_classifier(self.classifier_name, self.dataset_name, self.config_path)
         print "++++++++++++++++++++CREATED THE CLASSIFIER"
-	self.is_annotated = set([0,1]) 
+<<<<<<< HEAD
+	# self.is_annotated = set() 
+        # self.best_val = 0
+       # self.new_annotations = 0 
+        self.is_annotated = set([0,1,]) 
         self.best_val = 0
-       	self.new_annotations = 0 
+        self.new_annotations = 0 
         self.probs = self.classifier.predict()
         print "++++++++++++++++++++ACQUIRED PROBABILITIES"
         return (self.probs.copy(), self.is_annotated.copy())
+
+    def _render(self, mode='human', close=False): return
+    def _seed(self, seed=None): return []
 
     def _render(self, mode='human', close=False): return
     def _seed(self, seed=None): return []
