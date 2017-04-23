@@ -55,6 +55,7 @@ NUM_DATA = 20
 class Brain:
 	train_queue = [ [], [], [], [], [] ]	# s, a, r, s', s' terminal mask
 	lock_queue = threading.Lock()
+	lock_graph = threading.Lock()
 
 	def __init__(self):
 		#K.manual_variable_initialization(True)
@@ -84,7 +85,6 @@ class Brain:
         
 
         def _build_dynamic_model(self, is_annotated, inputs, device='/gpu:0'):
-            with self.lock_queue:
                 with self.sess.as_default():
                     with self.graph.as_default() as g:
                         # create the network
@@ -141,37 +141,38 @@ class Brain:
                         return out_actions, out_value 
 
         def _build_graph(self, state, device='/gpu:0'):
-            with self.sess.as_default():
-                with self.graph.as_default() as g:
-            
-                    # with tf.device(device): 
-                    probs, is_annotated = state
-                    # tf.reset_default_graph()
-                    # model = self._build_dynamic_model(is_annotated, device)
-                    inputs = [tf.placeholder(tf.float32, shape=(None, NUM_CLASSES), name='input_prob_tensor_{}_'.format(_)) for _ in xrange(NUM_DATA)]
-                    # p, v = model(inputs)
-                    p, v = self._build_dynamic_model(is_annotated, inputs, device)
+            with self.lock_graph:
+                with self.sess.as_default():
+                    with self.graph.as_default() as g:
+                
+                        # with tf.device(device): 
+                        probs, is_annotated = state
+                        # tf.reset_default_graph()
+                        # model = self._build_dynamic_model(is_annotated, device)
+                        inputs = [tf.placeholder(tf.float32, shape=(None, NUM_CLASSES), name='input_prob_tensor_{}_'.format(_)) for _ in xrange(NUM_DATA)]
+                        # p, v = model(inputs)
+                        p, v = self._build_dynamic_model(is_annotated, inputs, device)
 
-                    assert NUM_DATA-len(is_annotated) > 0, 'Nothing to annotate'
-                    a_t = tf.placeholder(tf.float32, shape=(None, 1+NUM_DATA-len(is_annotated)), name='a_t')
-                    r_t = tf.placeholder(tf.float32, shape=(None, 1), name='r_t') # discounted n step reward
-                    # s_t = [tf.placeholder(tf.float32, shape=(None, NUM_CLASSES), name='s_t_{}_'.format(i)) for i in xrange(NUM_DATA)]
+                        assert NUM_DATA-len(is_annotated) > 0, 'Nothing to annotate'
+                        a_t = tf.placeholder(tf.float32, shape=(None, 1+NUM_DATA-len(is_annotated)), name='a_t')
+                        r_t = tf.placeholder(tf.float32, shape=(None, 1), name='r_t') # discounted n step reward
+                        # s_t = [tf.placeholder(tf.float32, shape=(None, NUM_CLASSES), name='s_t_{}_'.format(i)) for i in xrange(NUM_DATA)]
 
-                    log_prob = tf.log( tf.reduce_sum(p * a_t, axis=1, keep_dims=True) + 1e-10, name='log_prob')
-                    advantage = r_t - v
+                        log_prob = tf.log( tf.reduce_sum(p * a_t, axis=1, keep_dims=True) + 1e-10, name='log_prob')
+                        advantage = r_t - v
 
-                    loss_policy = - log_prob * tf.stop_gradient(advantage)	# maximize policy
-                    loss_value  = LOSS_V * tf.square(advantage)  # minimize value error
-                    entropy = LOSS_ENTROPY * tf.reduce_sum(p * tf.log(p + 1e-10), axis=1, keep_dims=True, name='entropy')	# maximize entropy (regularization)
+                        loss_policy = - log_prob * tf.stop_gradient(advantage)	# maximize policy
+                        loss_value  = LOSS_V * tf.square(advantage)  # minimize value error
+                        entropy = LOSS_ENTROPY * tf.reduce_sum(p * tf.log(p + 1e-10), axis=1, keep_dims=True, name='entropy')	# maximize entropy (regularization)
 
-                    loss_total = tf.reduce_mean(loss_policy + loss_value + entropy, name='loss_total')
+                        loss_total = tf.reduce_mean(loss_policy + loss_value + entropy, name='loss_total')
 
-                    with tf.variable_scope('optimizer', reuse=True) as scope:
-                        optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99, name='MyRMSProp')
-                        tf.initialize_variables(optimizer)
-                    minimize = optimizer.minimize(loss_total)
+                        with tf.variable_scope('optimizer', reuse=True) as scope:
+                            optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99, name='MyRMSProp')
+                            tf.initialize_variables(optimizer)
+                        minimize = optimizer.minimize(loss_total)
 
-                    return inputs, a_t, r_t, minimize
+                        return inputs, a_t, r_t, minimize
 
                     
         def _build_predict_graph(self, state):
@@ -324,13 +325,15 @@ class Brain:
                 print NUM_DATA, probs.shape, '+++++++++++++'
                 with self.sess.as_default():
                     with self.graph.as_default() as g:
-                        inputs = [tf.placeholder(tf.float32, shape=(None, NUM_CLASSES), name='input_prob_tensor_{}_'.format(_)) for _ in xrange(NUM_DATA)]
-                            # p, v = model(inputs)
-                        feed_dict = {inputs[i]:probs[i].reshape(1,-1) for i in xrange(probs.shape[0])}
-                        print '#### FROM PREDICT ####'
-                        p, v = self._build_dynamic_model(is_annotated, inputs, device)
-                        print '#### DONE WITH PREDICT ####'
-			# p, v = model.predict([probs[i].reshape(1,NUM_CLASSES) for i in xrange(probs.shape[0])])
+                        p,v = None,None
+                        with self.lock_graph:
+                            inputs = [tf.placeholder(tf.float32, shape=(None, NUM_CLASSES), name='input_prob_tensor_{}_'.format(_)) for _ in xrange(NUM_DATA)]
+                                # p, v = model(inputs)
+                            feed_dict = {inputs[i]:probs[i].reshape(1,-1) for i in xrange(probs.shape[0])}
+                            print '#### FROM PREDICT ####'
+                            p, v = self._build_dynamic_model(is_annotated, inputs, device)
+                            print '#### DONE WITH PREDICT ####'
+                            # p, v = model.predict([probs[i].reshape(1,NUM_CLASSES) for i in xrange(probs.shape[0])])
                         p, v = self.sess.run([p,v], feed_dict=feed_dict)
 			return p, v
 
