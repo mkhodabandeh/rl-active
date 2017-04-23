@@ -98,7 +98,7 @@ class ActiveLearningEnv(gym.Env):
         print "+++++++++++++++++++++++INSIDE RESET"
         self.classifier = ClassifierFactory.get_classifier(self.classifier_name, self.dataset_name, self.config_path)
         print "++++++++++++++++++++CREATED THE CLASSIFIER"
-	self.is_annotated = set() 
+	self.is_annotated = set([0,1]) 
         self.best_val = 0
        	self.new_annotations = 0 
         self.probs = self.classifier.predict()

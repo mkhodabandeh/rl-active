@@ -299,7 +299,7 @@ class Agent:
 		global frames; frames = frames + 1
                 num_actions = NUM_DATA - len(s[1])+1
 		if random.random() < eps:
-			return random.randint(0, num_action-1)
+			return random.randint(0, num_actions-1)
 
 		else:
 			# s = np.array([s])
