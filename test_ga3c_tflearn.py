@@ -27,7 +27,7 @@ from tflearn.layers import *
 ENV = 'ActiveLearningEnv-v0'
 gym.make(ENV)
 # exit()
-RUN_TIME = 5 
+RUN_TIME =  60 
 THREADS = 1
 OPTIMIZERS = 1
 THREAD_DELAY = 0.001
@@ -38,7 +38,7 @@ N_STEP_RETURN = 8
 GAMMA_N = GAMMA ** N_STEP_RETURN
 
 EPS_START = 0.4
-EPS_STOP  = .15
+EPS_STOP  = .05
 EPS_STEPS = 75000
 
 # MIN_BATCH = 32
@@ -72,8 +72,10 @@ class Brain:
                         pi_tmp = self._build_pi_model(phi_s_tmp, l_input, None)
                         v_tmp = self._build_v_model(phi_s_tmp, None)
                         v_tmp = self._build_termination_action_model(phi_s_tmp, None)
-                        print '+++++++  Done with Initializing'
+                        with tf.variable_scope('optimizer', reuse=None) as scope:
+                            optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99, name='MyRMSProp')
                         self.sess.run(tf.global_variables_initializer())
+                        print '+++++++  Done with Initializing'
 		# self.default_graph = tf.get_default_graph()
 
 
@@ -99,6 +101,7 @@ class Brain:
                     # with tf.contrib.framework.arg_scope([tflearn.variables.variable]) as scope:
                     iter_id = 1
                     # with tf.variable_scope('phi_s' ) as scope:
+                    print 'is_annotated', is_annotated
                     for a_i in is_annotated:
                         print '----------------- build_annot:', a_i
                         phi_s_out = self._build_phi_s_model(inputs[a_i])
@@ -164,8 +167,9 @@ class Brain:
 
                     loss_total = tf.reduce_mean(loss_policy + loss_value + entropy, name='loss_total')
 
-                    optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99, name='MyRMSProp')
-                    #tf.initialize_variables(optimizer)
+                    with tf.variable_scope('optimizer', reuse=True) as scope:
+                        optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99, name='MyRMSProp')
+                        tf.initialize_variables(optimizer)
                     minimize = optimizer.minimize(loss_total)
 
                     return inputs, a_t, r_t, minimize
@@ -310,11 +314,19 @@ class Brain:
 		# print(state)
                 probs, is_annotated = state
                 # tf.reset_default_graph()
-                model = self._build_dynamic_model(is_annotated, device)
+                print 'is_annotated =', is_annotated
+                # model = self._build_dynamic_model(is_annotated, device)
                 # self.session.run(tf.global_variables_initializer())
+                print 'probs', probs
+                print NUM_DATA, probs.shape, '+++++++++++++'
                 with self.sess.as_default():
                     with self.graph.as_default() as g:
-			p, v = model.predict([probs[i].reshape(1,NUM_CLASSES) for i in xrange(probs.shape[0])])
+                        inputs = [tf.placeholder(tf.float32, shape=(None, NUM_CLASSES), name='input_prob_tensor_{}_'.format(_)) for _ in xrange(NUM_DATA)]
+                            # p, v = model(inputs)
+                        feed_dict = {inputs[i]:probs[i].reshape(1,-1) for i in xrange(probs.shape[0])}
+                        p, v = self._build_dynamic_model(is_annotated, inputs, device)
+			# p, v = model.predict([probs[i].reshape(1,NUM_CLASSES) for i in xrange(probs.shape[0])])
+                        p, v = self.sess.run([p,v], feed_dict=feed_dict)
 			return p, v
 
 	def predict_p(self, s, device):
@@ -336,15 +348,17 @@ class Agent:
 		self.R = 0.
 
 	def getEpsilon(self):
-		if(frames >= self.eps_steps):
-			return self.eps_end
-		else:
-			return self.eps_start + frames * (self.eps_end - self.eps_start) / self.eps_steps	# linearly interpolate
+            return self.eps_end
+		# if(frames >= self.eps_steps):
+			# return self.eps_end
+		# else:
+			# return self.eps_start + frames * (self.eps_end - self.eps_start) / self.eps_steps	# linearly interpolate
 
 	def act(self, s):
 		eps = self.getEpsilon()			
 		# global frames; frames = frames + 1
                 num_actions = NUM_DATA - len(s[1])+1
+                # print 'in act, s', s
 		if random.random() < eps:
 			return random.randint(0, num_actions-1)
 
@@ -425,9 +439,13 @@ class Environment(threading.Thread):
                         ######
 			s_, r, done, info = self.env.step(action)
 
+                        probs,is_annotated = s_
+                        assert probs.shape[0] == NUM_DATA
+                        #TODO REMOVE NEXT 3 lines
+
 			if done: # terminal state
 				s_ = None
-
+                        
 			self.agent.train(s, a, r, s_)
 
 			s = s_
@@ -495,7 +513,7 @@ envs = [Environment(device='/gpu:0') for i in range(THREADS)]
 opts = [Optimizer(device='/gpu:0') for i in range(OPTIMIZERS)]
 # opts = [Optimizer('/gpu:'+str(i%4)) for i in range(OPTIMIZERS)]
 
-op = Optimizer(device='/gpu:0')
+# op = Optimizer(device='/gpu:0')
 
 for o in opts:
         o.start()
