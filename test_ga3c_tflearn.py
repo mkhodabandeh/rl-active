@@ -15,7 +15,15 @@ sys.stdout.flush()
 
 
 import tensorflow as tf
+tf.logging.set_verbosity(tf.logging.INFO)
+# Added to make GPU not use maximum memory
+# Note: CUDA_VISIBLE_DEVICES imposes an upper bound on total
+# number of devices that could be used: https://github.com/tensorflow/tensorflow/issues/4566
 
+config = tf.ConfigProto()
+config.allow_soft_placement = True
+#config.gpu_options.allow_growth=True
+config.gpu_options.per_process_gpu_memory_fraction = 0.3
 import gym, time, random, threading
 from gym.envs.registration import  register
 # from envs.active_learning_env import ActiveLearningEnv
@@ -50,7 +58,7 @@ LOSS_ENTROPY = .01 	# entropy coefficient
 
 STATE_SIZE = 128
 NUM_CLASSES = 10
-NUM_DATA = 20 
+NUM_DATA = 1000
 #---------
 class Brain:
 	train_queue = [ [], [], [], [], [] ]	# s, a, r, s', s' terminal mask
@@ -63,7 +71,7 @@ class Brain:
 		# self.model = self._build_model()
                 # tf.reset_default_graph()
                 self.graph = tf.Graph()
-                self.sess = tf.Session(graph=self.graph)
+                self.sess = tf.Session(graph=self.graph, config=config)
                 with self.sess.as_default():
                     with self.graph.as_default() as g:
                         l_input = input_data(shape=(None, NUM_CLASSES))
@@ -108,10 +116,8 @@ class Brain:
                             # phi_s_out = self.phi_s_model(inputs[a_i])
                             state_outputs.append(phi_s_out)
                             # tf.get_variable_scope().reuse_variables()
-                            print 'ITER: '+ str(iter_id)
                             iter_id = iter_id + 1
                         #s_concat = merge(state_outputs, 'mean',axis=1)
-                        print state_outputs
                         phi_state = merge(state_outputs, 'mean',axis=0, name='avergae_pool_state')
                         phi_state = reshape(phi_state, (1, STATE_SIZE), name='reshape_state')
                         print '+++++++++++++phi_state', phi_state
@@ -122,9 +128,6 @@ class Brain:
                         pi_outputs = []
                         # with tf.variable_scope('pi_model', reuse=True) as scope:
                         for a_i in not_annotated:
-                            # print inputs[a_i]
-                            # print phi_state
-                            # print self.pi_model
                             pi_i = self._build_pi_model(phi_state,inputs[a_i])#PI(a_i|phi(s))
                             pi_outputs.append(pi_i)
                             # scope.reuse_variables()
@@ -135,9 +138,6 @@ class Brain:
                         action_concat = merge(pi_outputs, 'concat', axis=1, name='concatenate_PIs')
                         out_actions = tflearn.activations.softmax(action_concat)
                         out_value = self._build_v_model(phi_state)
-                        #TODO:Check with mehran about merge type. Mehran: No need to merge.
-                        # final_model = tflearn.merge([out_actions, out_value], 'elemwise_sum')
-                        # final_model = tflearn.DNN(final_model, session=self.session)
                         return out_actions, out_value 
 
         def _build_graph(self, state, device='/gpu:0'):
@@ -296,7 +296,9 @@ class Brain:
                                 feed_dict = {s_t[i]:probs[i].reshape(1,-1) for i in xrange(probs.shape[0])}
                                 feed_dict[a_t] = a.reshape(1,-1)
                                 feed_dict[r_t] = r.reshape(1,-1)
-                                #TODO: check if this thing initializes all the parameters? how to check? -> assert  "phi_s_model.fc1.weights before  this line of code" == "after"  
+                                #TODO: check if this thing initializes all the parameters? how to check? -> assert  "phi_s_model.fc1.weights before this line of code" == "after"
+                                import ipdb
+                                ipdb.set_trace()
                                 init_op = tf.global_variables_initializer()
                                 self.sess.run(init_op )
                                 self.sess.run(minimize, feed_dict=feed_dict)
