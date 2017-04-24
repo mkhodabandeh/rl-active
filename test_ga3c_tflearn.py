@@ -297,6 +297,7 @@ class Brain:
                                 feed_dict[a_t] = a.reshape(1,-1)
                                 feed_dict[r_t] = r.reshape(1,-1)
                                 #TODO: check if this thing initializes all the parameters? how to check? -> assert  "phi_s_model.fc1.weights before this line of code" == "after"
+                                # the code seems to skip this for loop
                                 import ipdb
                                 ipdb.set_trace()
                                 init_op = tf.global_variables_initializer()
