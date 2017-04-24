@@ -55,6 +55,7 @@ NUM_DATA = 20
 class Brain:
 	train_queue = [ [], [], [], [], [] ]	# s, a, r, s', s' terminal mask
 	lock_queue = threading.Lock()
+	lock_graph = threading.Lock()
 
 	def __init__(self):
 		#K.manual_variable_initialization(True)
@@ -66,7 +67,6 @@ class Brain:
                 with self.sess.as_default():
                     with self.graph.as_default() as g:
                         l_input = input_data(shape=(None, NUM_CLASSES))
-                        # with tf.variable_scope('phi_s') as scope:
                         phi_s_tmp = self._build_phi_s_model(l_input, None)
                         # with tf.variable_scope('pi_model') as scope:
                         pi_tmp = self._build_pi_model(phi_s_tmp, l_input, None)
@@ -85,94 +85,94 @@ class Brain:
         
 
         def _build_dynamic_model(self, is_annotated, inputs, device='/gpu:0'):
-            with self.sess.as_default():
-                with self.graph.as_default() as g:
-                    # create the network
-                    not_annotated = set(range(NUM_DATA)).difference(is_annotated)
-                    not_annotated = sorted(not_annotated) 
-                    # delta from test_ga3c
-                    # 1. Convert "Input" format of keras to input_data format of tflearn
-                    # inputs = []
-                    # for i in xrange(NUM_DATA):
-                        # inputs.append(input_data(shape=(None, NUM_CLASSES)))
+                with self.sess.as_default():
+                    with self.graph.as_default() as g:
+                        # create the network
+                        not_annotated = set(range(NUM_DATA)).difference(is_annotated)
+                        not_annotated = sorted(not_annotated) 
+                        # delta from test_ga3c
+                        # 1. Convert "Input" format of keras to input_data format of tflearn
+                        # inputs = []
+                        # for i in xrange(NUM_DATA):
+                            # inputs.append(input_data(shape=(None, NUM_CLASSES)))
 
-                    state_outputs = []
-                        #share weights between different inputs
-                    # with tf.contrib.framework.arg_scope([tflearn.variables.variable]) as scope:
-                    iter_id = 1
-                    # with tf.variable_scope('phi_s' ) as scope:
-                    print 'is_annotated', is_annotated
-                    for a_i in is_annotated:
-                        print '----------------- build_annot:', a_i
-                        phi_s_out = self._build_phi_s_model(inputs[a_i])
-                        # scope.reuse_variables()
-                        # phi_s_out = self.phi_s_model(inputs[a_i])
-                        state_outputs.append(phi_s_out)
-                        # tf.get_variable_scope().reuse_variables()
-                        print 'ITER: '+ str(iter_id)
-                        iter_id = iter_id + 1
-                    #s_concat = merge(state_outputs, 'mean',axis=1)
-                    print state_outputs
-                    phi_state = merge(state_outputs, 'mean',axis=0, name='avergae_pool_state')
-                    phi_state = reshape(phi_state, (1, STATE_SIZE), name='reshape_state')
-                    print '+++++++++++++phi_state', phi_state
-                    #phi_state = GlobalAveragePooling1D(name='global_max_pool_phi_s')(s_concat)
-                    
-                    #TODO We could probably have phi_state for not_annotated instances
+                        state_outputs = []
+                            #share weights between different inputs
+                        # with tf.contrib.framework.arg_scope([tflearn.variables.variable]) as scope:
+                        iter_id = 1
+                        print 'is_annotated', is_annotated
+                        for a_i in is_annotated:
+                            print '----------------- build_annot:', a_i
+                            phi_s_out = self._build_phi_s_model(inputs[a_i])
+                            # scope.reuse_variables()
+                            # phi_s_out = self.phi_s_model(inputs[a_i])
+                            state_outputs.append(phi_s_out)
+                            # tf.get_variable_scope().reuse_variables()
+                            print 'ITER: '+ str(iter_id)
+                            iter_id = iter_id + 1
+                        #s_concat = merge(state_outputs, 'mean',axis=1)
+                        print state_outputs
+                        phi_state = merge(state_outputs, 'mean',axis=0, name='avergae_pool_state')
+                        phi_state = reshape(phi_state, (1, STATE_SIZE), name='reshape_state')
+                        print '+++++++++++++phi_state', phi_state
+                        #phi_state = GlobalAveragePooling1D(name='global_max_pool_phi_s')(s_concat)
+                        
+                        #TODO We could probably have phi_state for not_annotated instances
 
-                    pi_outputs = []
-                    # with tf.variable_scope('pi_model', reuse=True) as scope:
-                    for a_i in not_annotated:
-                        # print inputs[a_i]
-                        # print phi_state
-                        # print self.pi_model
-                        pi_i = self._build_pi_model(phi_state,inputs[a_i])#PI(a_i|phi(s))
-                        pi_outputs.append(pi_i)
-                        # scope.reuse_variables()
+                        pi_outputs = []
+                        # with tf.variable_scope('pi_model', reuse=True) as scope:
+                        for a_i in not_annotated:
+                            # print inputs[a_i]
+                            # print phi_state
+                            # print self.pi_model
+                            pi_i = self._build_pi_model(phi_state,inputs[a_i])#PI(a_i|phi(s))
+                            pi_outputs.append(pi_i)
+                            # scope.reuse_variables()
 
-                    termination_action = self._build_termination_action_model(phi_state)
-                    pi_outputs.append(termination_action)
+                        termination_action = self._build_termination_action_model(phi_state)
+                        pi_outputs.append(termination_action)
 
-                    action_concat = merge(pi_outputs, 'concat', axis=1, name='concatenate_PIs')
-                    out_actions = tflearn.activations.softmax(action_concat)
-                    out_value = self._build_v_model(phi_state)
-                    #TODO:Check with mehran about merge type. Mehran: No need to merge.
-                    # final_model = tflearn.merge([out_actions, out_value], 'elemwise_sum')
-                    # final_model = tflearn.DNN(final_model, session=self.session)
-                    return out_actions, out_value 
+                        action_concat = merge(pi_outputs, 'concat', axis=1, name='concatenate_PIs')
+                        out_actions = tflearn.activations.softmax(action_concat)
+                        out_value = self._build_v_model(phi_state)
+                        #TODO:Check with mehran about merge type. Mehran: No need to merge.
+                        # final_model = tflearn.merge([out_actions, out_value], 'elemwise_sum')
+                        # final_model = tflearn.DNN(final_model, session=self.session)
+                        return out_actions, out_value 
 
         def _build_graph(self, state, device='/gpu:0'):
-            with self.sess.as_default():
-                with self.graph.as_default() as g:
-            
-                    # with tf.device(device): 
-                    probs, is_annotated = state
-                    # tf.reset_default_graph()
-                    # model = self._build_dynamic_model(is_annotated, device)
-                    inputs = [tf.placeholder(tf.float32, shape=(None, NUM_CLASSES), name='input_prob_tensor_{}_'.format(_)) for _ in xrange(NUM_DATA)]
-                    # p, v = model(inputs)
-                    p, v = self._build_dynamic_model(is_annotated, inputs, device)
+            with self.lock_graph:
+                with self.sess.as_default():
+                    with self.graph.as_default() as g:
+                
+                        # with tf.device(device): 
+                        probs, is_annotated = state
+                        # tf.reset_default_graph()
+                        # model = self._build_dynamic_model(is_annotated, device)
+                        inputs = [tf.placeholder(tf.float32, shape=(None, NUM_CLASSES), name='input_prob_tensor_{}_'.format(_)) for _ in xrange(NUM_DATA)]
+                        # p, v = model(inputs)
+                        p, v = self._build_dynamic_model(is_annotated, inputs, device)
 
-                    assert NUM_DATA-len(is_annotated) > 0, 'Nothing to annotate'
-                    a_t = tf.placeholder(tf.float32, shape=(None, 1+NUM_DATA-len(is_annotated)), name='a_t')
-                    r_t = tf.placeholder(tf.float32, shape=(None, 1), name='r_t') # discounted n step reward
-                    # s_t = [tf.placeholder(tf.float32, shape=(None, NUM_CLASSES), name='s_t_{}_'.format(i)) for i in xrange(NUM_DATA)]
+                        assert NUM_DATA-len(is_annotated) > 0, 'Nothing to annotate'
+                        a_t = tf.placeholder(tf.float32, shape=(None, 1+NUM_DATA-len(is_annotated)), name='a_t')
+                        r_t = tf.placeholder(tf.float32, shape=(None, 1), name='r_t') # discounted n step reward
+                        # s_t = [tf.placeholder(tf.float32, shape=(None, NUM_CLASSES), name='s_t_{}_'.format(i)) for i in xrange(NUM_DATA)]
 
-                    log_prob = tf.log( tf.reduce_sum(p * a_t, axis=1, keep_dims=True) + 1e-10, name='log_prob')
-                    advantage = r_t - v
+                        log_prob = tf.log( tf.reduce_sum(p * a_t, axis=1, keep_dims=True) + 1e-10, name='log_prob')
+                        advantage = r_t - v
 
-                    loss_policy = - log_prob * tf.stop_gradient(advantage)	# maximize policy
-                    loss_value  = LOSS_V * tf.square(advantage)  # minimize value error
-                    entropy = LOSS_ENTROPY * tf.reduce_sum(p * tf.log(p + 1e-10), axis=1, keep_dims=True, name='entropy')	# maximize entropy (regularization)
+                        loss_policy = - log_prob * tf.stop_gradient(advantage)	# maximize policy
+                        loss_value  = LOSS_V * tf.square(advantage)  # minimize value error
+                        entropy = LOSS_ENTROPY * tf.reduce_sum(p * tf.log(p + 1e-10), axis=1, keep_dims=True, name='entropy')	# maximize entropy (regularization)
 
-                    loss_total = tf.reduce_mean(loss_policy + loss_value + entropy, name='loss_total')
+                        loss_total = tf.reduce_mean(loss_policy + loss_value + entropy, name='loss_total')
 
-                    with tf.variable_scope('optimizer', reuse=True) as scope:
-                        optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99, name='MyRMSProp')
-                        tf.initialize_variables(optimizer)
-                    minimize = optimizer.minimize(loss_total)
+                        with tf.variable_scope('optimizer', reuse=True) as scope:
+                            optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99, name='MyRMSProp')
+                            tf.initialize_variables(optimizer)
+                        minimize = optimizer.minimize(loss_total)
 
-                    return inputs, a_t, r_t, minimize
+                        return inputs, a_t, r_t, minimize
 
                     
         def _build_predict_graph(self, state):
@@ -183,7 +183,7 @@ class Brain:
         def _build_termination_action_model(self, l_input, reuse=True):
             with self.sess.as_default():
                 with self.graph.as_default() as g:
-                    with tf.variable_scope('phi_s', reuse=reuse) as scope:
+                    with tf.variable_scope('termination', reuse=reuse) as scope:
                         # Builds the state graph
                         # Input is an image class probabilities
                         # output is the state vector with size STATE_SIZE
@@ -205,7 +205,9 @@ class Brain:
                         # output is the state vector with size STATE_SIZE
                         # l_input = input_data(shape=(None, NUM_CLASSES) )
                         l_dense = fully_connected(l_input, 128, activation='elu',name='dens1_phi_s')
+                        print ' *******_____+++ ldense', l_dense
                         l_dense1 = fully_connected(l_dense, 64, activation='elu',name='dens2_phi_s')
+                        print ' *******_____+++ ldense1', l_dense1
                         out_state = fully_connected(l_dense1, STATE_SIZE, name='out_state_phi_s', activation='elu')
                         #model = Model(inputs=l_input,outputs=out_state)
                         # model = tflearn.DNN(out_state, session=self.sess)
@@ -285,7 +287,9 @@ class Brain:
                         # tf.reset_default_graph()
                         with self.sess.as_default():
                             with self.graph.as_default() as g:
+                                print '#### FROM OPTIMIZER ####'
                                 s_t, a_t, r_t, minimize = self._build_graph(s, device)
+                                print '#### DONE OPTIMIZER ####'
                                 probs,is_annotated = s
                                 # print 'OH', s_t[0]
                                 # print 'PROBS', probs[0].reshape(1, -1) 
@@ -321,11 +325,15 @@ class Brain:
                 print NUM_DATA, probs.shape, '+++++++++++++'
                 with self.sess.as_default():
                     with self.graph.as_default() as g:
-                        inputs = [tf.placeholder(tf.float32, shape=(None, NUM_CLASSES), name='input_prob_tensor_{}_'.format(_)) for _ in xrange(NUM_DATA)]
-                            # p, v = model(inputs)
-                        feed_dict = {inputs[i]:probs[i].reshape(1,-1) for i in xrange(probs.shape[0])}
-                        p, v = self._build_dynamic_model(is_annotated, inputs, device)
-			# p, v = model.predict([probs[i].reshape(1,NUM_CLASSES) for i in xrange(probs.shape[0])])
+                        p,v = None,None
+                        with self.lock_graph:
+                            inputs = [tf.placeholder(tf.float32, shape=(None, NUM_CLASSES), name='input_prob_tensor_{}_'.format(_)) for _ in xrange(NUM_DATA)]
+                                # p, v = model(inputs)
+                            feed_dict = {inputs[i]:probs[i].reshape(1,-1) for i in xrange(probs.shape[0])}
+                            print '#### FROM PREDICT ####'
+                            p, v = self._build_dynamic_model(is_annotated, inputs, device)
+                            print '#### DONE WITH PREDICT ####'
+                            # p, v = model.predict([probs[i].reshape(1,NUM_CLASSES) for i in xrange(probs.shape[0])])
                         p, v = self.sess.run([p,v], feed_dict=feed_dict)
 			return p, v
 
