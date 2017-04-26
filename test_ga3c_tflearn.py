@@ -58,7 +58,7 @@ LOSS_ENTROPY = .01 	# entropy coefficient
 
 STATE_SIZE = 128
 NUM_CLASSES = 10
-NUM_DATA = 1000
+NUM_DATA = 10
 #---------
 class Brain:
 	train_queue = [ [], [], [], [], [] ]	# s, a, r, s', s' terminal mask
@@ -84,12 +84,15 @@ class Brain:
                             optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99, name='MyRMSProp')
                         self.sess.run(tf.global_variables_initializer())
                         print '+++++++  Done with Initializing'
+                        with tf.variable_scope('graph_optimizer', reuse=None) as scope:
+                            self.graph_optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99, name='GraphRMSProp')
 		# self.default_graph = tf.get_default_graph()
 
 
                 ########### WHAT TO DO WITH THESE?
 		# self.graph = self._build_graph(self.model)
-		# self.default_graph.finalize()	# avoid modifications
+		# self.default_graph.finalize()	# avoid modificationspu
+		
         
 
         def _build_dynamic_model(self, is_annotated, inputs, device='/gpu:0'):
@@ -121,8 +124,6 @@ class Brain:
                         phi_state = merge(state_outputs, 'mean',axis=0, name='avergae_pool_state')
                         phi_state = reshape(phi_state, (1, STATE_SIZE), name='reshape_state')
                         print '+++++++++++++phi_state', phi_state
-                        #phi_state = GlobalAveragePooling1D(name='global_max_pool_phi_s')(s_concat)
-                        
                         #TODO We could probably have phi_state for not_annotated instances
 
                         pi_outputs = []
@@ -144,7 +145,7 @@ class Brain:
             with self.lock_graph:
                 with self.sess.as_default():
                     with self.graph.as_default() as g:
-                
+                        print '+++++++BUILD GRAPH++++++++++++'
                         # with tf.device(device): 
                         probs, is_annotated = state
                         # tf.reset_default_graph()
@@ -166,12 +167,11 @@ class Brain:
                         entropy = LOSS_ENTROPY * tf.reduce_sum(p * tf.log(p + 1e-10), axis=1, keep_dims=True, name='entropy')	# maximize entropy (regularization)
 
                         loss_total = tf.reduce_mean(loss_policy + loss_value + entropy, name='loss_total')
-
-                        with tf.variable_scope('optimizer', reuse=True) as scope:
-                            optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99, name='MyRMSProp')
-                            tf.initialize_variables(optimizer)
-                        minimize = optimizer.minimize(loss_total)
-
+                        print 'TRAINABLE VARIABLES: ', ','.join([v.name for v in tf.trainable_variables()])
+                        #with tf.variable_scope('optimizer', reuse=None) as scope:
+                            #optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99, name='MyRMSProp_graph')
+                            #tf.initialize_variables(optimizer)
+                        minimize = self.graph_optimizer.minimize(loss_total)
                         return inputs, a_t, r_t, minimize
 
                     
@@ -298,8 +298,6 @@ class Brain:
                                 feed_dict[r_t] = r.reshape(1,-1)
                                 #TODO: check if this thing initializes all the parameters? how to check? -> assert  "phi_s_model.fc1.weights before this line of code" == "after"
                                 # the code seems to skip this for loop
-                                import ipdb
-                                ipdb.set_trace()
                                 init_op = tf.global_variables_initializer()
                                 self.sess.run(init_op )
                                 self.sess.run(minimize, feed_dict=feed_dict)
