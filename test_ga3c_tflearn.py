@@ -80,12 +80,10 @@ class Brain:
                         pi_tmp = self._build_pi_model(phi_s_tmp, l_input, None)
                         v_tmp = self._build_v_model(phi_s_tmp, None)
                         v_tmp = self._build_termination_action_model(phi_s_tmp, None)
-                        with tf.variable_scope('optimizer', reuse=None) as scope:
-                            optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99, name='MyRMSProp')
-                        self.sess.run(tf.global_variables_initializer())
-                        print '+++++++  Done with Initializing'
                         with tf.variable_scope('graph_optimizer', reuse=None) as scope:
                             self.graph_optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99, name='GraphRMSProp')
+                        self.sess.run(tf.global_variables_initializer())
+                        print '+++++++  Done with Initializing'
 		# self.default_graph = tf.get_default_graph()
 
 
@@ -219,13 +217,9 @@ class Brain:
             with self.sess.as_default():
                 with self.graph.as_default() as g:
                     with tf.variable_scope('v', reuse=reuse) as scope:
-                        #phi_s = Input( shape=(STATE_SIZE,) )
-                        # phi_s = input_data( shape=(None, STATE_SIZE))
                         l_dense1 = fully_connected(phi_s, 16, activation='elu', name='fc1_v')
                         out_value = fully_connected(l_dense1, 1, activation='linear', name='out_value')
-                        # model = tflearn.DNN(out_value, session=self.sess)
-                        return out_value 
-                        #return out_value
+                        return out_value
 
         def _build_pi_model(self,phi_s, p_dist_i, reuse=True):
             with self.sess.as_default():
@@ -240,9 +234,7 @@ class Brain:
                         l_dense2 = fully_connected(p_dist_i, 16, activation='elu', name='dense2_pi_')
                         l_concat = merge([l_dense1, l_dense2], 'concat', axis=1, name='concat_pi_model')
                         out_action = fully_connected(l_concat, 1, activation='linear', name='out_action_')
-                        # model = tflearn.DNN(out_action, session=self.sess)
-                        #return out_action
-                        return out_action 
+                        return out_action
 
 	def optimize(self, device):
 		if len(self.train_queue[0]) < MIN_BATCH:
@@ -298,8 +290,8 @@ class Brain:
                                 feed_dict[r_t] = r.reshape(1,-1)
                                 #TODO: check if this thing initializes all the parameters? how to check? -> assert  "phi_s_model.fc1.weights before this line of code" == "after"
                                 # the code seems to skip this for loop
-                                init_op = tf.global_variables_initializer()
-                                self.sess.run(init_op )
+                                #init_op = tf.global_variables_initializer()
+                                #self.sess.run(init_op )
                                 self.sess.run(minimize, feed_dict=feed_dict)
                 
 	def train_push(self, s, a, r, s_):
