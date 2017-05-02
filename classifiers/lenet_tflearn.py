@@ -26,6 +26,14 @@ class LeNetTF(BaseClassifier):
     name = 'LeNet_TF'
     count = 0
     def __init__(self, config_path=None):
+        with tf.device('/gpu:2'):
+            tf_config = tf.ConfigProto()
+            tf_config.allow_soft_placement = True
+            #config.gpu_options.allow_growth=True
+            tf_config.gpu_options.per_process_gpu_memory_fraction = 0.3
+            # self.tf_config = tf_config
+        self.graph = tf.Graph()
+        self.sess = tf.Session(graph=self.graph, config=tf_config)
         if config_path:
             self.configs = yaml.load(open(config_path))
             # self.data = self.configs['data']
@@ -101,26 +109,27 @@ class LeNetTF(BaseClassifier):
                 return score
 
     def _create_model(self):
-        self.graph = tf.Graph()
-        self.sess = tf.Session(graph=self.graph)
+        # self.graph = tf.Graph()
+        # self.sess = tf.Session(graph=self.graph, config=self.tf_config)
         with self.sess.as_default():
             with self.graph.as_default() as g:
-                network = input_data(shape=[None, 28, 28, 1], name='input')
-                network = conv_2d(network, 32, 3, activation='relu', regularizer="L2")
-                network = max_pool_2d(network, 2)
-                network = local_response_normalization(network)
-                network = conv_2d(network, 64, 3, activation='relu', regularizer="L2")
-                network = max_pool_2d(network, 2)
-                network = local_response_normalization(network)
-                network = fully_connected(network, 128, activation='tanh', name='fc1')
-                # self.w = tflearn.variables.get_layer_variables_by_name('fc1')
-                network = dropout(network, 0.8 )
-                network = fully_connected(network, 256, activation='tanh')
-                network = dropout(network, 0.8)
-                network = fully_connected(network, 10, activation='softmax')
-                network = regression(network, optimizer='adam', learning_rate=0.01,
-                                             loss='categorical_crossentropy', name='target')
-                self.model = tflearn.DNN(network, tensorboard_verbose=0)
+                with tf.device(self.device):
+                    network = input_data(shape=[None, 28, 28, 1], name='input')
+                    network = conv_2d(network, 32, 3, activation='relu', regularizer="L2")
+                    network = max_pool_2d(network, 2)
+                    network = local_response_normalization(network)
+                    network = conv_2d(network, 64, 3, activation='relu', regularizer="L2")
+                    network = max_pool_2d(network, 2)
+                    network = local_response_normalization(network)
+                    network = fully_connected(network, 128, activation='tanh', name='fc1')
+                    # self.w = tflearn.variables.get_layer_variables_by_name('fc1')
+                    network = dropout(network, 0.8 )
+                    network = fully_connected(network, 256, activation='tanh')
+                    network = dropout(network, 0.8)
+                    network = fully_connected(network, 10, activation='softmax')
+                    network = regression(network, optimizer='adam', learning_rate=0.01,
+                                                 loss='categorical_crossentropy', name='target')
+                    self.model = tflearn.DNN(network, tensorboard_verbose=0)
         # print('create_model',self.model.get_weights(self.w[1]))
          
     def _reset(self):

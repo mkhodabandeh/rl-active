@@ -20,10 +20,6 @@ tf.logging.set_verbosity(tf.logging.INFO)
 # Note: CUDA_VISIBLE_DEVICES imposes an upper bound on total
 # number of devices that could be used: https://github.com/tensorflow/tensorflow/issues/4566
 
-config = tf.ConfigProto()
-config.allow_soft_placement = True
-#config.gpu_options.allow_growth=True
-config.gpu_options.per_process_gpu_memory_fraction = 0.3
 import gym, time, random, threading
 from gym.envs.registration import  register
 # from envs.active_learning_env import ActiveLearningEnv
@@ -58,12 +54,17 @@ LOSS_ENTROPY = .01 	# entropy coefficient
 
 STATE_SIZE = 128
 NUM_CLASSES = 10
-NUM_DATA = 10
+NUM_DATA = 20
 #---------
 class Brain:
 	train_queue = [ [], [], [], [], [] ]	# s, a, r, s', s' terminal mask
 	lock_queue = threading.Lock()
 	lock_graph = threading.Lock()
+        with tf.device('/gpu:2'):
+            config = tf.ConfigProto()
+            config.allow_soft_placement = True
+            #config.gpu_options.allow_growth=True
+            config.gpu_options.per_process_gpu_memory_fraction = 0.3
 
 	def __init__(self):
 		#K.manual_variable_initialization(True)
@@ -71,7 +72,7 @@ class Brain:
 		# self.model = self._build_model()
                 # tf.reset_default_graph()
                 self.graph = tf.Graph()
-                self.sess = tf.Session(graph=self.graph, config=config)
+                self.sess = tf.Session(graph=self.graph, config=Brain.config)
                 with self.sess.as_default():
                     with self.graph.as_default() as g:
                         l_input = input_data(shape=(None, NUM_CLASSES))
@@ -93,7 +94,7 @@ class Brain:
 		
         
 
-        def _build_dynamic_model(self, is_annotated, inputs, device='/gpu:0'):
+        def _build_dynamic_model(self, is_annotated, inputs):
                 with self.sess.as_default():
                     with self.graph.as_default() as g:
                         # create the network
@@ -139,38 +140,38 @@ class Brain:
                         out_value = self._build_v_model(phi_state)
                         return out_actions, out_value 
 
-        def _build_graph(self, state, device='/gpu:0'):
+        def _build_graph(self, state, device):
             with self.lock_graph:
                 with self.sess.as_default():
                     with self.graph.as_default() as g:
-                        print '+++++++BUILD GRAPH++++++++++++'
+                            print '+++++++BUILD GRAPH++++++++++++'
                         # with tf.device(device): 
-                        probs, is_annotated = state
-                        # tf.reset_default_graph()
-                        # model = self._build_dynamic_model(is_annotated, device)
-                        inputs = [tf.placeholder(tf.float32, shape=(None, NUM_CLASSES), name='input_prob_tensor_{}_'.format(_)) for _ in xrange(NUM_DATA)]
-                        # p, v = model(inputs)
-                        p, v = self._build_dynamic_model(is_annotated, inputs, device)
+                            probs, is_annotated = state
+                            # tf.reset_default_graph()
+                            # model = self._build_dynamic_model(is_annotated, device)
+                            inputs = [tf.placeholder(tf.float32, shape=(None, NUM_CLASSES), name='input_prob_tensor_{}_'.format(_)) for _ in xrange(NUM_DATA)]
+                            # p, v = model(inputs)
+                            p, v = self._build_dynamic_model(is_annotated, inputs, device)
 
-                        assert NUM_DATA-len(is_annotated) > 0, 'Nothing to annotate'
-                        a_t = tf.placeholder(tf.float32, shape=(None, 1+NUM_DATA-len(is_annotated)), name='a_t')
-                        r_t = tf.placeholder(tf.float32, shape=(None, 1), name='r_t') # discounted n step reward
-                        # s_t = [tf.placeholder(tf.float32, shape=(None, NUM_CLASSES), name='s_t_{}_'.format(i)) for i in xrange(NUM_DATA)]
+                            assert NUM_DATA-len(is_annotated) > 0, 'Nothing to annotate'
+                            a_t = tf.placeholder(tf.float32, shape=(None, 1+NUM_DATA-len(is_annotated)), name='a_t')
+                            r_t = tf.placeholder(tf.float32, shape=(None, 1), name='r_t') # discounted n step reward
+                            # s_t = [tf.placeholder(tf.float32, shape=(None, NUM_CLASSES), name='s_t_{}_'.format(i)) for i in xrange(NUM_DATA)]
 
-                        log_prob = tf.log( tf.reduce_sum(p * a_t, axis=1, keep_dims=True) + 1e-10, name='log_prob')
-                        advantage = r_t - v
+                            log_prob = tf.log( tf.reduce_sum(p * a_t, axis=1, keep_dims=True) + 1e-10, name='log_prob')
+                            advantage = r_t - v
 
-                        loss_policy = - log_prob * tf.stop_gradient(advantage)	# maximize policy
-                        loss_value  = LOSS_V * tf.square(advantage)  # minimize value error
-                        entropy = LOSS_ENTROPY * tf.reduce_sum(p * tf.log(p + 1e-10), axis=1, keep_dims=True, name='entropy')	# maximize entropy (regularization)
+                            loss_policy = - log_prob * tf.stop_gradient(advantage)	# maximize policy
+                            loss_value  = LOSS_V * tf.square(advantage)  # minimize value error
+                            entropy = LOSS_ENTROPY * tf.reduce_sum(p * tf.log(p + 1e-10), axis=1, keep_dims=True, name='entropy')	# maximize entropy (regularization)
 
-                        loss_total = tf.reduce_mean(loss_policy + loss_value + entropy, name='loss_total')
-                        print 'TRAINABLE VARIABLES: ', ','.join([v.name for v in tf.trainable_variables()])
-                        #with tf.variable_scope('optimizer', reuse=None) as scope:
-                            #optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99, name='MyRMSProp_graph')
-                            #tf.initialize_variables(optimizer)
-                        minimize = self.graph_optimizer.minimize(loss_total)
-                        return inputs, a_t, r_t, minimize
+                            loss_total = tf.reduce_mean(loss_policy + loss_value + entropy, name='loss_total')
+                            print 'TRAINABLE VARIABLES: ', ','.join([v.name for v in tf.trainable_variables()])
+                            #with tf.variable_scope('optimizer', reuse=None) as scope:
+                                #optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99, name='MyRMSProp_graph')
+                                #tf.initialize_variables(optimizer)
+                            minimize = self.graph_optimizer.minimize(loss_total)
+                            return inputs, a_t, r_t, minimize
 
                     
         def _build_predict_graph(self, state):
@@ -203,9 +204,7 @@ class Brain:
                         # output is the state vector with size STATE_SIZE
                         # l_input = input_data(shape=(None, NUM_CLASSES) )
                         l_dense = fully_connected(l_input, 128, activation='elu',name='dens1_phi_s')
-                        print ' *******_____+++ ldense', l_dense
                         l_dense1 = fully_connected(l_dense, 64, activation='elu',name='dens2_phi_s')
-                        print ' *******_____+++ ldense1', l_dense1
                         out_state = fully_connected(l_dense1, STATE_SIZE, name='out_state_phi_s', activation='elu')
                         #model = Model(inputs=l_input,outputs=out_state)
                         # model = tflearn.DNN(out_state, session=self.sess)
@@ -280,7 +279,8 @@ class Brain:
                         with self.sess.as_default():
                             with self.graph.as_default() as g:
                                 print '#### FROM OPTIMIZER ####'
-                                s_t, a_t, r_t, minimize = self._build_graph(s, device)
+                                with tf.device(device):
+                                    s_t, a_t, r_t, minimize = self._build_graph(s, device)
                                 print '#### DONE OPTIMIZER ####'
                                 probs,is_annotated = s
                                 # print 'OH', s_t[0]
@@ -320,13 +320,14 @@ class Brain:
                     with self.graph.as_default() as g:
                         p,v = None,None
                         with self.lock_graph:
-                            inputs = [tf.placeholder(tf.float32, shape=(None, NUM_CLASSES), name='input_prob_tensor_{}_'.format(_)) for _ in xrange(NUM_DATA)]
-                                # p, v = model(inputs)
-                            feed_dict = {inputs[i]:probs[i].reshape(1,-1) for i in xrange(probs.shape[0])}
-                            print '#### FROM PREDICT ####'
-                            p, v = self._build_dynamic_model(is_annotated, inputs, device)
-                            print '#### DONE WITH PREDICT ####'
-                            # p, v = model.predict([probs[i].reshape(1,NUM_CLASSES) for i in xrange(probs.shape[0])])
+                            with tf.device(device):
+                                inputs = [tf.placeholder(tf.float32, shape=(None, NUM_CLASSES), name='input_prob_tensor_{}_'.format(_)) for _ in xrange(NUM_DATA)]
+                                    # p, v = model(inputs)
+                                feed_dict = {inputs[i]:probs[i].reshape(1,-1) for i in xrange(probs.shape[0])}
+                                print '#### FROM PREDICT ####'
+                                p, v = self._build_dynamic_model(is_annotated, inputs, device)
+                                print '#### DONE WITH PREDICT ####'
+                                # p, v = model.predict([probs[i].reshape(1,NUM_CLASSES) for i in xrange(probs.shape[0])])
                         p, v = self.sess.run([p,v], feed_dict=feed_dict)
 			return p, v
 
@@ -416,6 +417,7 @@ class Environment(threading.Thread):
 		self.device = device
 		self.render = render
 		self.env = gym.make(ENV)
+                self.env.device = device
 		self.agent = Agent(eps_start, eps_end, eps_steps,device)
 
 	def runEpisode(self):
@@ -508,10 +510,10 @@ def gen_s():
 # a = brain._build_graph(s,'/gpu:0')
 # a = brain.predict(s, '/gpu:0')
 # brain.optimize('/gpu:0')
-envs = [Environment(device='/gpu:0') for i in range(THREADS)]
+envs = [Environment(device='/gpu:2') for i in range(THREADS)]
 # envs = [Environment('/gpu:'+str(i%4)) for i in range(THREADS)]
 
-opts = [Optimizer(device='/gpu:0') for i in range(OPTIMIZERS)]
+opts = [Optimizer(device='/gpu:2') for i in range(OPTIMIZERS)]
 # opts = [Optimizer('/gpu:'+str(i%4)) for i in range(OPTIMIZERS)]
 
 # op = Optimizer(device='/gpu:0')

@@ -47,59 +47,58 @@ class ActiveLearningEnv(gym.Env):
         config_path = ''
         self.config_path = config_path
         self.classifier = ClassifierFactory.get_classifier(classifier_name,  dataset_name, config_path)
-	self.n = self.classifier.get_train_n()
+        self.n = self.classifier.get_train_n()
         self.k = self.classifier.get_class_n()
         self.action_space = spaces.Tuple((
-                                  spaces.Discrete(self.n), # which instance to annotate (n -> size of the training set) 
-                                  spaces.MultiBinary(1) # retrain the classifier using the new data 
-                                   )) #TODO: verify this 
+            spaces.Discrete(self.n), # which instance to annotate (n -> size of the training set) 
+            spaces.MultiBinary(1) # retrain the classifier using the new data 
+            )) #TODO: verify this 
         print('number of instances:', self.n, 'number of classes:',self.k)
         self.probs = np.zeros((self.n,self.k))        
         self.best_val = 0
-       	self.new_annotations = 0 
+        self.new_annotations = 0 
         self.previous_acc = 0
-	# n_classes = self.dataset.n_classes
+        # n_classes = self.dataset.n_classes
         self.max_annotations = self.n
         # self.observation_space = spaces.Tuple([spaces.Tuple([spaces.Box(0,1, 1) for i in n_classes]) for j in n]) # validation accuracy
 
     def _close(self):
-	pass
+        pass
 
     def _compute_reward(self, acc_gain=None):
-	#TODO: define reward
-	if acc_gain:
-	    return acc_gain
-	else:
+        #TODO: define reward
+        if acc_gain:
+            return acc_gain
+        else:
             return -1
 
     def _step(self, action):
         label_i, do_train = action #action is a Tuple ( int, boolean)
-	if do_train == True: 
-	    self.classifier.set_annotations(self.is_annotated)
+        if do_train == True: 
+            self.classifier.set_annotations(self.is_annotated)
             self.probs = self.classifier.train()
             acc = self.classifier.evaluate()
             acc = acc[0]
             # print acc
-	    # save best validation
-	    acc_gain = acc - self.previous_acc 
+            # save best validation
+            acc_gain = acc - self.previous_acc 
             if acc > self.best_val:
                 self.best_val = acc
 
             self.previous_acc = acc;
-	    reward = self._compute_reward(acc_gain) 
-            
-	else:
+            reward = self._compute_reward(acc_gain) 
+
+        else:
             self.is_annotated.add(label_i)
             reward = self._compute_reward()
         done = len(self.is_annotated) == self.max_annotations
         return (self.probs.copy(), self.is_annotated.copy()), reward, done, None 
-        
+
 
     def _reset(self): 
         print "+++++++++++++++++++++++INSIDE RESET"
         self.classifier = ClassifierFactory.get_classifier(self.classifier_name, self.dataset_name, self.config_path)
         print "++++++++++++++++++++CREATED THE CLASSIFIER"
-<<<<<<< HEAD
 	# self.is_annotated = set() 
         # self.best_val = 0
        # self.new_annotations = 0 
