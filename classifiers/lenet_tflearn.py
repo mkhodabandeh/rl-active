@@ -25,8 +25,11 @@ class LeNetTF(BaseClassifier):
     '''
     name = 'LeNet_TF'
     count = 0
-    def __init__(self, config_path=None):
-        with tf.device('/gpu:2'):
+    def __init__(self, device='', config_path=None):
+        if not device:
+            self.device = '/gpu:2'
+        print self.device
+        with tf.device(self.device):
             tf_config = tf.ConfigProto()
             tf_config.allow_soft_placement = True
             #config.gpu_options.allow_growth=True
@@ -113,6 +116,7 @@ class LeNetTF(BaseClassifier):
         # self.sess = tf.Session(graph=self.graph, config=self.tf_config)
         with self.sess.as_default():
             with self.graph.as_default() as g:
+                print self.device
                 with tf.device(self.device):
                     network = input_data(shape=[None, 28, 28, 1], name='input')
                     network = conv_2d(network, 32, 3, activation='relu', regularizer="L2")
