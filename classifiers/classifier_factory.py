@@ -9,7 +9,7 @@ class ClassifierFactory(object):
     def get_classifier(self, classifier_name, database_name, config_path, device):
         for cls in self.CLASSIFIERS:
             if cls.name == classifier_name:
-                return cls(config_path)
+                return cls(config_path, device)
         raise Exception('Classifier, {0}, is not existed in: {1}'.format(classifier_name ,str(self.get_classifiers_list())))
     
     @classmethod
@@ -20,6 +20,6 @@ class ClassifierFactory(object):
         raise NotImplementedError
     
 def test_classifier():
-    cls = Classifier.get_classifier('LeNet', 'config_path')
+    cls = Classifier.get_classifier('LeNet', 'config_path', '/gpu:0')
     cls.train()
     pred_labels = cls.predict()

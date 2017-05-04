@@ -8,6 +8,9 @@ from tflearn.layers.normalization import local_response_normalization
 from tflearn.layers.estimator import regression
 import numpy as np
 # Data loading and preprocessing
+import subprocess
+current_user = subprocess.check_output(['whoami']).strip()
+# current_user = result.stdout
 
 import yaml
 import tensorflow as tf
@@ -25,11 +28,8 @@ class LeNetTF(BaseClassifier):
     '''
     name = 'LeNet_TF'
     count = 0
-    def __init__(self, device='', config_path=None):
-        if not device:
-            self.device = '/gpu:3'
-        else:
-            self.device = '/gpu:' + device
+    def __init__(self, config_path=None, device=None):
+        self.device = device
         tf_config = tf.ConfigProto()
         tf_config.allow_soft_placement = True
         tf_config.gpu_options.per_process_gpu_memory_fraction = 0.3
@@ -94,15 +94,36 @@ class LeNetTF(BaseClassifier):
         with self.sess.as_default():
             #with self.graph.as_default() as g:
             self.model.fit({'input': x_train}, {'target': y_train}, n_epoch=1, validation_set=({'input': self.x_test}, {'target': self.y_test}), batch_size=self.batch_size, snapshot_step=100, show_metric=True, run_id='convnet_mnist')
-        return self._predict(self.x_train)
+        # return self._predict(self.x_train)
+        return self.predict()
 
     def _predict(self, data=None):
         print('Doing Predictions...')
         with self.sess.as_default():
             #with self.graph.as_default() as g:
             if data is None:
-                return np.array(self.model.predict({'input': self.x_train}))
+                arr = np.zeros((self.x_train.shape[0], self.num_classes))
+                # print arr.shape
+                batch_size = 128
+                for i in xrange(self.x_train.shape[0]/batch_size):
+                    # arr[i*batch_size:(i+1)*batch_size,...] =  
+                    temp = np.array(self.model.predict({'input': self.x_train[i*batch_size:(i+1)*batch_size, ...]}))
+                    # print temp.shape
+                    arr[i*batch_size:(i+1)*batch_size, ...] = temp
+                    # print i*batch_size, (i+1)*batch_size
+                    # print temp.shape
+                    # print temp[0:2, ...]
+                    # pdb.set_trace()
+                print (i+1)*batch_size, self.x_train.shape[0]
+                if (i+1)*batch_size != self.x_train.shape[0]:
+                    # print 'hi'
+                    temp = np.array(self.model.predict({'input': self.x_train[(i+1)*batch_size:-1, ...]}))
+                    arr[(i+1)*batch_size:-1, ...] = temp
+
+                # return np.array(self.model.predict({'input': self.x_train}))
+                return arr
             else:
+                #TODO batch 
                 return np.array(self.model.predict({'input': data}))
 
     def _evaluate(self, data=None):
@@ -113,7 +134,7 @@ class LeNetTF(BaseClassifier):
                 self._get_default_data()
             else:
                 self._get_nondefault_data(data)
-            score = self.model.evaluate(self.x_test, self.y_test)
+            score = self.model.evaluate(self.x_test, self.y_test, batch_size=128)
         return score
 
     def _create_model(self):
@@ -137,14 +158,14 @@ class LeNetTF(BaseClassifier):
                                             loss='categorical_crossentropy', name='target')
         with self.sess.as_default():
             #with self.graph.as_default() as g:
-            self.model = tflearn.DNN(network, tensorboard_verbose=0)
+            self.model = tflearn.DNN(network, tensorboard_verbose=0, tensorboard_dir='/tmp/'+current_user+'/tflearn_log')
         # print('create_model',self.model.get_weights(self.w[1]))
          
     def _reset(self):
         self.sess.close()
         del self.model
-        import ipdb
-        ipdb.set_trace()
+        # import ipdb
+        # ipdb.set_trace()
         self._create_model()
 
     def _save_model(self):
@@ -152,7 +173,7 @@ class LeNetTF(BaseClassifier):
         self.ep+=1
 
 def test_lenet():
-    lenet = LeNetTF()
+    lenet = LeNetTF(device='/gpu:0')
     lenet._train()
     pred_labels = lenet._predict()
     print(pred_labels.shape)
