@@ -6,7 +6,7 @@ class ClassifierFactory(object):
     CLASSIFIERS = [LeNet, LeNetTF, Cifar10]
 
     @classmethod
-    def get_classifier(self, classifier_name, database_name, config_path):
+    def get_classifier(self, classifier_name, database_name, config_path, device):
         for cls in self.CLASSIFIERS:
             if cls.name == classifier_name:
                 return cls(config_path)
