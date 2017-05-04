@@ -41,12 +41,13 @@ class ActiveLearningEnv(gym.Env):
     metadata = {'render.modes': []}
     reward_range = (-np.inf, np.inf)
 
-    def __init__(self, classifier_name='LeNet_TF', dataset_name='MNist'):
+    def __init__(self, classifier_name='LeNet_TF', dataset_name='MNist', device=None):
         self.classifier_name = classifier_name
         self.dataset_name = dataset_name
         config_path = ''
         self.config_path = config_path
-        self.classifier = ClassifierFactory.get_classifier(classifier_name,  dataset_name, config_path)
+        self.device = device
+        self.classifier = ClassifierFactory.get_classifier(classifier_name,  dataset_name, config_path, device)
         self.n = self.classifier.get_train_n()
         self.k = self.classifier.get_class_n()
         self.action_space = spaces.Tuple((
@@ -97,7 +98,7 @@ class ActiveLearningEnv(gym.Env):
 
     def _reset(self): 
         print "+++++++++++++++++++++++INSIDE RESET"
-        self.classifier = ClassifierFactory.get_classifier(self.classifier_name, self.dataset_name, self.config_path)
+        self.classifier = ClassifierFactory.get_classifier(self.classifier_name, self.dataset_name, self.config_path, self.device)
         print "++++++++++++++++++++CREATED THE CLASSIFIER"
 	# self.is_annotated = set() 
         # self.best_val = 0

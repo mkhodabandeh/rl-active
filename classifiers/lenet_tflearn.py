@@ -28,11 +28,8 @@ class LeNetTF(BaseClassifier):
     '''
     name = 'LeNet_TF'
     count = 0
-    def __init__(self, device='', config_path=None):
-        if not device:
-            self.device = '/gpu:3'
-        else:
-            self.device = '/gpu:' + device
+    def __init__(self, config_path=None, device=None):
+        self.device = device
         tf_config = tf.ConfigProto()
         tf_config.allow_soft_placement = True
         tf_config.gpu_options.per_process_gpu_memory_fraction = 0.3
@@ -105,14 +102,24 @@ class LeNetTF(BaseClassifier):
         with self.sess.as_default():
             #with self.graph.as_default() as g:
             if data is None:
-                arr = np.array((self.x_train.shape[0], self.num_classes))
-                batch_size = 100
+                arr = np.zeros((self.x_train.shape[0], self.num_classes))
+                # print arr.shape
+                batch_size = 128
                 for i in xrange(self.x_train.shape[0]/batch_size):
                     # arr[i*batch_size:(i+1)*batch_size,...] =  
                     temp = np.array(self.model.predict({'input': self.x_train[i*batch_size:(i+1)*batch_size, ...]}))
                     # print temp.shape
+                    arr[i*batch_size:(i+1)*batch_size, ...] = temp
+                    # print i*batch_size, (i+1)*batch_size
+                    # print temp.shape
                     # print temp[0:2, ...]
                     # pdb.set_trace()
+                print (i+1)*batch_size, self.x_train.shape[0]
+                if (i+1)*batch_size != self.x_train.shape[0]:
+                    # print 'hi'
+                    temp = np.array(self.model.predict({'input': self.x_train[(i+1)*batch_size:-1, ...]}))
+                    arr[(i+1)*batch_size:-1, ...] = temp
+
                 # return np.array(self.model.predict({'input': self.x_train}))
                 return arr
             else:
@@ -166,7 +173,7 @@ class LeNetTF(BaseClassifier):
         self.ep+=1
 
 def test_lenet():
-    lenet = LeNetTF()
+    lenet = LeNetTF(device='/gpu:0')
     lenet._train()
     pred_labels = lenet._predict()
     print(pred_labels.shape)

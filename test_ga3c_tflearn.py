@@ -20,6 +20,7 @@ tf.logging.set_verbosity(tf.logging.INFO)
 # Note: CUDA_VISIBLE_DEVICES imposes an upper bound on total
 # number of devices that could be used: https://github.com/tensorflow/tensorflow/issues/4566
 
+from envs.active_learning_env import ActiveLearningEnv
 import gym, time, random, threading
 from gym.envs.registration import  register
 # from envs.active_learning_env import ActiveLearningEnv
@@ -29,7 +30,7 @@ from tflearn.layers import *
 
 #-- constants
 ENV = 'ActiveLearningEnv-v0'
-gym.make(ENV)
+# gym.make(ENV)
 # exit()
 RUN_TIME =  60 
 THREADS = 1
@@ -412,11 +413,12 @@ class Agent:
 class Environment(threading.Thread):
 	stop_signal = False
 
-	def __init__(self, render=False, eps_start=EPS_START, eps_end=EPS_STOP, eps_steps=EPS_STEPS, device='/gpu:0'):
+	def __init__(self, render=False, eps_start=EPS_START, eps_end=EPS_STOP, eps_steps=EPS_STEPS, device=None):
 		threading.Thread.__init__(self)
 		self.device = device
 		self.render = render
-		self.env = gym.make(ENV)
+                self.env = ActiveLearningEnv(device=device)
+		# self.env = gym.make(ENV)
                 self.env.device = device
 		self.agent = Agent(eps_start, eps_end, eps_steps,device)
 
@@ -470,7 +472,7 @@ class Environment(threading.Thread):
 class Optimizer(threading.Thread):
 	stop_signal = False
 
-	def __init__(self,device='/gpu:0'):
+	def __init__(self,device=None):
 		threading.Thread.__init__(self)
                 self.device = device
 
@@ -510,10 +512,10 @@ def gen_s():
 # a = brain._build_graph(s,'/gpu:0')
 # a = brain.predict(s, '/gpu:0')
 # brain.optimize('/gpu:0')
-envs = [Environment(device='/gpu:2') for i in range(THREADS)]
+envs = [Environment(device='/gpu:0') for i in range(THREADS)]
 # envs = [Environment('/gpu:'+str(i%4)) for i in range(THREADS)]
 
-opts = [Optimizer(device='/gpu:2') for i in range(OPTIMIZERS)]
+opts = [Optimizer(device='/gpu:0') for i in range(OPTIMIZERS)]
 # opts = [Optimizer('/gpu:'+str(i%4)) for i in range(OPTIMIZERS)]
 
 # op = Optimizer(device='/gpu:0')

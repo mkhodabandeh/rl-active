@@ -3,7 +3,7 @@ class BaseClassifier(object):
     # All subclasses must set the name and implement the following functions
     name = None
 
-    def __init__(self, config_path=None):
+    def __init__(self, config_path=None, device=None):
         pass
         # self.config_path = config_path
         # self.is_annotated = set()
