@@ -12,7 +12,7 @@ import numpy as np
 import yaml
 import tensorflow as tf
 
-NUM_DATA = 20
+NUM_DATA = 55000
 class LeNetTF(BaseClassifier):
     '''
     Inspired from keras implementation of LeNet:
@@ -27,16 +27,15 @@ class LeNetTF(BaseClassifier):
     count = 0
     def __init__(self, device='', config_path=None):
         if not device:
-            self.device = '/gpu:2'
-        print self.device
-        with tf.device(self.device):
-            tf_config = tf.ConfigProto()
-            tf_config.allow_soft_placement = True
-            #config.gpu_options.allow_growth=True
-            tf_config.gpu_options.per_process_gpu_memory_fraction = 0.3
-            # self.tf_config = tf_config
-        self.graph = tf.Graph()
-        self.sess = tf.Session(graph=self.graph, config=tf_config)
+            self.device = '/gpu:3'
+        else:
+            self.device = '/gpu:' + device
+        tf_config = tf.ConfigProto()
+        tf_config.allow_soft_placement = True
+        tf_config.gpu_options.per_process_gpu_memory_fraction = 0.3
+        tf_config.log_device_placement = True
+        #self.graph = tf.Graph()
+        self.sess = tf.Session(config=tf_config)
         if config_path:
             self.configs = yaml.load(open(config_path))
             # self.data = self.configs['data']
@@ -84,61 +83,68 @@ class LeNetTF(BaseClassifier):
 
     def _train(self, data=None):
         print('Creating MNIST model...')
-        x_train = self.x_train[list(self.is_annotated)]
-        y_train = self.y_train[list(self.is_annotated)]
+        if self.is_annotated:
+            x_train = self.x_train[list(self.is_annotated)]
+            y_train = self.y_train[list(self.is_annotated)]
+        else:
+            x_train = self.x_train
+            y_train = self.y_train
+        print x_train.shape
+        print y_train.shape
         with self.sess.as_default():
-            with self.graph.as_default() as g:
-                self.model.fit({'input': x_train}, {'target': y_train}, n_epoch=10, validation_set=({'input': self.x_test}, {'target': self.y_test}), snapshot_step=100, show_metric=True, run_id='convnet_mnist')
-                return self._predict(self.x_train)
+            #with self.graph.as_default() as g:
+            self.model.fit({'input': x_train}, {'target': y_train}, n_epoch=1, validation_set=({'input': self.x_test}, {'target': self.y_test}), batch_size=self.batch_size, snapshot_step=100, show_metric=True, run_id='convnet_mnist')
+        return self._predict(self.x_train)
 
     def _predict(self, data=None):
         print('Doing Predictions...')
         with self.sess.as_default():
-            with self.graph.as_default() as g:
-                if data is None:
-                    return np.array(self.model.predict(self.x_train))
-                else:
-                    return np.array(self.model.predict(data))
+            #with self.graph.as_default() as g:
+            if data is None:
+                return np.array(self.model.predict({'input': self.x_train}))
+            else:
+                return np.array(self.model.predict({'input': data}))
 
     def _evaluate(self, data=None):
         print('Getting Accuracy...')
         with self.sess.as_default():
-            with self.graph.as_default() as g:
-                if data is None:
-                    self._get_default_data()
-                else:
-                    self._get_nondefault_data(data)
-                score = self.model.evaluate(self.x_test, self.y_test)
-                return score
+            #with self.graph.as_default() as g:
+            if data is None:
+                self._get_default_data()
+            else:
+                self._get_nondefault_data(data)
+            score = self.model.evaluate(self.x_test, self.y_test)
+        return score
 
     def _create_model(self):
         # self.graph = tf.Graph()
         # self.sess = tf.Session(graph=self.graph, config=self.tf_config)
+        with tf.device(self.device):
+            network = input_data(shape=[None, 28, 28, 1], name='input')
+            network = conv_2d(network, 32, 3, activation='relu', regularizer="L2")
+            network = max_pool_2d(network, 2)
+            network = local_response_normalization(network)
+            network = conv_2d(network, 64, 3, activation='relu', regularizer="L2")
+            network = max_pool_2d(network, 2)
+            network = local_response_normalization(network)
+            network = fully_connected(network, 128, activation='tanh', name='fc1')
+            # self.w = tflearn.variables.get_layer_variables_by_name('fc1')
+            network = dropout(network, 0.8 )
+            network = fully_connected(network, 256, activation='tanh')
+            network = dropout(network, 0.8)
+            network = fully_connected(network, 10, activation='softmax')
+            network = regression(network, optimizer='adam', learning_rate=0.01,
+                                            loss='categorical_crossentropy', name='target')
         with self.sess.as_default():
-            with self.graph.as_default() as g:
-                print self.device
-                with tf.device(self.device):
-                    network = input_data(shape=[None, 28, 28, 1], name='input')
-                    network = conv_2d(network, 32, 3, activation='relu', regularizer="L2")
-                    network = max_pool_2d(network, 2)
-                    network = local_response_normalization(network)
-                    network = conv_2d(network, 64, 3, activation='relu', regularizer="L2")
-                    network = max_pool_2d(network, 2)
-                    network = local_response_normalization(network)
-                    network = fully_connected(network, 128, activation='tanh', name='fc1')
-                    # self.w = tflearn.variables.get_layer_variables_by_name('fc1')
-                    network = dropout(network, 0.8 )
-                    network = fully_connected(network, 256, activation='tanh')
-                    network = dropout(network, 0.8)
-                    network = fully_connected(network, 10, activation='softmax')
-                    network = regression(network, optimizer='adam', learning_rate=0.01,
-                                                 loss='categorical_crossentropy', name='target')
-                    self.model = tflearn.DNN(network, tensorboard_verbose=0)
+            #with self.graph.as_default() as g:
+            self.model = tflearn.DNN(network, tensorboard_verbose=0)
         # print('create_model',self.model.get_weights(self.w[1]))
          
     def _reset(self):
         self.sess.close()
         del self.model
+        import ipdb
+        ipdb.set_trace()
         self._create_model()
 
     def _save_model(self):
@@ -147,9 +153,11 @@ class LeNetTF(BaseClassifier):
 
 def test_lenet():
     lenet = LeNetTF()
-    # lenet._train()
+    lenet._train()
     pred_labels = lenet._predict()
     print(pred_labels.shape)
+    lenet._reset()
+
     
     # print(accuracy
 
