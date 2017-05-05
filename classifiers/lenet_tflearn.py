@@ -1,4 +1,13 @@
 # from __future__ import division, print_function, absolute_import
+import os
+
+#see: https://github.com/tensorflow/tensorflow/issues/566
+
+os.environ['CUDA_VISIBLE_DEVICES'] = "0"
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = "2"
+import tensorflow as tf
+
+tf.logging.set_verbosity(tf.logging.ERROR)
 from base_classifier import BaseClassifier 
 
 import tflearn
@@ -13,7 +22,6 @@ current_user = subprocess.check_output(['whoami']).strip()
 # current_user = result.stdout
 
 import yaml
-import tensorflow as tf
 
 NUM_DATA = 55000
 class LeNetTF(BaseClassifier):
@@ -91,9 +99,9 @@ class LeNetTF(BaseClassifier):
             y_train = self.y_train
         print x_train.shape
         print y_train.shape
-        with self.sess.as_default():
+        #with self.sess.as_default():
             #with self.graph.as_default() as g:
-            self.model.fit({'input': x_train}, {'target': y_train}, n_epoch=1, validation_set=({'input': self.x_test}, {'target': self.y_test}), batch_size=self.batch_size, snapshot_step=100, show_metric=True, run_id='convnet_mnist')
+        self.model.fit({'input': x_train}, {'target': y_train}, n_epoch=1, validation_set=({'input': self.x_test}, {'target': self.y_test}), batch_size=self.batch_size, snapshot_step=100, show_metric=True, run_id='convnet_mnist')
         # return self._predict(self.x_train)
         return self.predict()
 
@@ -156,13 +164,13 @@ class LeNetTF(BaseClassifier):
             network = fully_connected(network, 10, activation='softmax')
             network = regression(network, optimizer='adam', learning_rate=0.01,
                                             loss='categorical_crossentropy', name='target')
-        with self.sess.as_default():
-            #with self.graph.as_default() as g:
-            self.model = tflearn.DNN(network, tensorboard_verbose=0, tensorboard_dir='/tmp/'+current_user+'/tflearn_log')
+        #self.sess.run(tf.global_variables_initializer())
+        with tf.device(self.device):
+            self.model = tflearn.DNN(network, tensorboard_verbose=0, tensorboard_dir='/tmp/'+current_user+'/tflearn_log', session=self.sess)
         # print('create_model',self.model.get_weights(self.w[1]))
          
     def _reset(self):
-        self.sess.close()
+        #self.sess.close()
         del self.model
         # import ipdb
         # ipdb.set_trace()
