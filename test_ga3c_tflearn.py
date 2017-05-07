@@ -13,7 +13,8 @@ sys.stdout.flush()
 import numpy as np
 sys.stdout.flush()
 
-
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL']='3'
 import tensorflow as tf
 tf.logging.set_verbosity(tf.logging.INFO)
 # Added to make GPU not use maximum memory
@@ -64,6 +65,7 @@ class Brain:
         with tf.device('/gpu:2'):
             config = tf.ConfigProto()
             config.allow_soft_placement = True
+            config.log_device_placement = False
             #config.gpu_options.allow_growth=True
             config.gpu_options.per_process_gpu_memory_fraction = 0.3
 
@@ -84,7 +86,14 @@ class Brain:
                         v_tmp = self._build_termination_action_model(phi_s_tmp, None)
                         with tf.variable_scope('graph_optimizer', reuse=None) as scope:
                             self.graph_optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99, name='GraphRMSProp')
-                        self.sess.run(tf.global_variables_initializer())
+                        try:
+                            init = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
+                            # self.sess.run(init)
+                            self.sess.run(tf.variables_initializer(tf.get_collection_ref('is_training')))
+                        except:
+                            init = tf.initialize_all_variables()
+                        # self.sess.run(tf.global_variables_initializer())
+                        self.sess.run(init)
                         print '+++++++  Done with Initializing'
 		# self.default_graph = tf.get_default_graph()
 
@@ -113,7 +122,7 @@ class Brain:
                         iter_id = 1
                         print 'is_annotated', is_annotated
                         for a_i in is_annotated:
-                            print '----------------- build_annot:', a_i
+                            # print '----------------- build_annot:', a_i
                             phi_s_out = self._build_phi_s_model(inputs[a_i])
                             # scope.reuse_variables()
                             # phi_s_out = self.phi_s_model(inputs[a_i])
@@ -123,7 +132,7 @@ class Brain:
                         #s_concat = merge(state_outputs, 'mean',axis=1)
                         phi_state = merge(state_outputs, 'mean',axis=0, name='avergae_pool_state')
                         phi_state = reshape(phi_state, (1, STATE_SIZE), name='reshape_state')
-                        print '+++++++++++++phi_state', phi_state
+                        # print '+++++++++++++phi_state', phi_state
                         #TODO We could probably have phi_state for not_annotated instances
 
                         pi_outputs = []
@@ -145,14 +154,14 @@ class Brain:
             with self.lock_graph:
                 with self.sess.as_default():
                     with self.graph.as_default() as g:
-                            print '+++++++BUILD GRAPH++++++++++++'
-                        # with tf.device(device): 
+                        print '+++++++BUILD GRAPH++++++++++++'
+                        with tf.device(device): 
                             probs, is_annotated = state
                             # tf.reset_default_graph()
                             # model = self._build_dynamic_model(is_annotated, device)
                             inputs = [tf.placeholder(tf.float32, shape=(None, NUM_CLASSES), name='input_prob_tensor_{}_'.format(_)) for _ in xrange(NUM_DATA)]
                             # p, v = model(inputs)
-                            p, v = self._build_dynamic_model(is_annotated, inputs, device)
+                            p, v = self._build_dynamic_model(is_annotated, inputs)
 
                             assert NUM_DATA-len(is_annotated) > 0, 'Nothing to annotate'
                             a_t = tf.placeholder(tf.float32, shape=(None, 1+NUM_DATA-len(is_annotated)), name='a_t')
@@ -167,7 +176,7 @@ class Brain:
                             entropy = LOSS_ENTROPY * tf.reduce_sum(p * tf.log(p + 1e-10), axis=1, keep_dims=True, name='entropy')	# maximize entropy (regularization)
 
                             loss_total = tf.reduce_mean(loss_policy + loss_value + entropy, name='loss_total')
-                            print 'TRAINABLE VARIABLES: ', ','.join([v.name for v in tf.trainable_variables()])
+                            # print 'TRAINABLE VARIABLES: ', ','.join([v.name for v in tf.trainable_variables()])
                             #with tf.variable_scope('optimizer', reuse=None) as scope:
                                 #optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99, name='MyRMSProp_graph')
                                 #tf.initialize_variables(optimizer)
@@ -315,7 +324,7 @@ class Brain:
                 print 'is_annotated =', is_annotated
                 # model = self._build_dynamic_model(is_annotated, device)
                 # self.session.run(tf.global_variables_initializer())
-                print 'probs', probs
+                # print 'probs', probs
                 print NUM_DATA, probs.shape, '+++++++++++++'
                 with self.sess.as_default():
                     with self.graph.as_default() as g:
@@ -326,7 +335,7 @@ class Brain:
                                     # p, v = model(inputs)
                                 feed_dict = {inputs[i]:probs[i].reshape(1,-1) for i in xrange(probs.shape[0])}
                                 print '#### FROM PREDICT ####'
-                                p, v = self._build_dynamic_model(is_annotated, inputs, device)
+                                p, v = self._build_dynamic_model(is_annotated, inputs)
                                 print '#### DONE WITH PREDICT ####'
                                 # p, v = model.predict([probs[i].reshape(1,NUM_CLASSES) for i in xrange(probs.shape[0])])
                         p, v = self.sess.run([p,v], feed_dict=feed_dict)
@@ -512,7 +521,7 @@ def gen_s():
 # a = brain._build_graph(s,'/gpu:0')
 # a = brain.predict(s, '/gpu:0')
 # brain.optimize('/gpu:0')
-envs = [Environment(device='/gpu:0') for i in range(THREADS)]
+envs = [Environment(device='/gpu:{}'.format(i)) for i in range(THREADS)]
 # envs = [Environment('/gpu:'+str(i%4)) for i in range(THREADS)]
 
 opts = [Optimizer(device='/gpu:0') for i in range(OPTIMIZERS)]
