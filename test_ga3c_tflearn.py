@@ -66,8 +66,8 @@ class Brain:
             config = tf.ConfigProto()
             config.allow_soft_placement = True
             config.log_device_placement = False
-            #config.gpu_options.allow_growth=True
-            config.gpu_options.per_process_gpu_memory_fraction = 0.3
+            config.gpu_options.allow_growth=True
+            # config.gpu_options.per_process_gpu_memory_fraction = 0.3
 
 	def __init__(self):
 		#K.manual_variable_initialization(True)
