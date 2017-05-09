@@ -14,7 +14,7 @@ import numpy as np
 sys.stdout.flush()
 
 import os
-os.environ['TF_CPP_MIN_LOG_LEVEL']='3'
+# os.environ['TF_CPP_MIN_LOG_LEVEL']='3'
 import tensorflow as tf
 tf.logging.set_verbosity(tf.logging.INFO)
 # Added to make GPU not use maximum memory
@@ -76,6 +76,7 @@ class Brain:
                 # tf.reset_default_graph()
                 self.graph = tf.Graph()
                 self.sess = tf.Session(graph=self.graph, config=Brain.config)
+                self.rms_is_initialized = False
                 with self.sess.as_default():
                     with self.graph.as_default() as g:
                         l_input = input_data(shape=(None, NUM_CLASSES))
@@ -86,6 +87,7 @@ class Brain:
                         v_tmp = self._build_termination_action_model(phi_s_tmp, None)
                         with tf.variable_scope('graph_optimizer', reuse=None) as scope:
                             self.graph_optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99, name='GraphRMSProp')
+                            print 'GLOBAL VARIABLES: ', [v.name for v in tf.global_variables()] #if 'RMS' in v.name]
                         try:
                             init = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
                             # self.sess.run(init)
@@ -180,7 +182,15 @@ class Brain:
                             #with tf.variable_scope('optimizer', reuse=None) as scope:
                                 #optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99, name='MyRMSProp_graph')
                                 #tf.initialize_variables(optimizer)
+                            # print 'GLOBAL VARIABLES: ', [v.name for v in tf.global_variables() if 'RMS' in v.name]
                             minimize = self.graph_optimizer.minimize(loss_total)
+                            if not self.rms_is_initialized:
+                                rms_vars= [v for v in tf.global_variables() if 'RMS' in v.name]
+                                # print '++++++++ initializing these:', rms_vars
+                                init = tf.initialize_variables(rms_vars)
+                                self.sess.run(init)
+                                self.rms_is_initialized = True
+                            # print 'LOCAL VARIABLES: ', [v.name for v in tf.local_variables() ]
                             return inputs, a_t, r_t, minimize
 
                     
@@ -501,7 +511,7 @@ class Optimizer(threading.Thread):
 NONE_STATE = np.zeros(STATE_SIZE)
 
 brain = Brain()	# brain is global in A3C
-
+# exit()
 def gen_s():
     s = np.random.rand(NUM_DATA, NUM_CLASSES) 
     for i in xrange(s.shape[0]):
@@ -521,10 +531,10 @@ def gen_s():
 # a = brain._build_graph(s,'/gpu:0')
 # a = brain.predict(s, '/gpu:0')
 # brain.optimize('/gpu:0')
-envs = [Environment(device='/gpu:{}'.format(i)) for i in range(THREADS)]
+envs = [Environment(device='/gpu:{}'.format(i+2)) for i in range(THREADS)]
 # envs = [Environment('/gpu:'+str(i%4)) for i in range(THREADS)]
 
-opts = [Optimizer(device='/gpu:0') for i in range(OPTIMIZERS)]
+opts = [Optimizer(device='/gpu:2') for i in range(OPTIMIZERS)]
 # opts = [Optimizer('/gpu:'+str(i%4)) for i in range(OPTIMIZERS)]
 
 # op = Optimizer(device='/gpu:0')

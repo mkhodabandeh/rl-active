@@ -4,7 +4,7 @@ import os
 #see: https://github.com/tensorflow/tensorflow/issues/566
 
 # os.environ['CUDA_VISIBLE_DEVICES'] = "0"
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = "3"
+# os.environ['TF_CPP_MIN_LOG_LEVEL'] = "3"
 import tensorflow as tf
 
 tf.logging.set_verbosity(tf.logging.ERROR)
