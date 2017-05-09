@@ -23,7 +23,7 @@ current_user = subprocess.check_output(['whoami']).strip()
 
 import yaml
 
-NUM_DATA = 20
+NUM_DATA = 50000
 class LeNetTF(BaseClassifier):
     '''
     Inspired from keras implementation of LeNet:
