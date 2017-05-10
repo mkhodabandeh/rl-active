@@ -77,6 +77,8 @@ class Brain:
                 self.graph = tf.Graph()
                 self.sess = tf.Session(graph=self.graph, config=Brain.config)
                 self.rms_is_initialized = False
+                self.train_writer = tf.summary.FileWriter(summaries_dir + '/train', self.sess.graph)
+                self.test_writer = tf.summary.FileWriter(summaries_dir + '/test', self.sess.graph)
                 with self.sess.as_default():
                     with self.graph.as_default() as g:
                         l_input = input_data(shape=(None, NUM_CLASSES))
@@ -87,7 +89,6 @@ class Brain:
                         v_tmp = self._build_termination_action_model(phi_s_tmp, None)
                         with tf.variable_scope('graph_optimizer', reuse=None) as scope:
                             self.graph_optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99, name='GraphRMSProp')
-                            print 'GLOBAL VARIABLES: ', [v.name for v in tf.global_variables()] #if 'RMS' in v.name]
                         try:
                             init = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
                             # self.sess.run(init)
@@ -164,7 +165,8 @@ class Brain:
                             inputs = [tf.placeholder(tf.float32, shape=(None, NUM_CLASSES), name='input_prob_tensor_{}_'.format(_)) for _ in xrange(NUM_DATA)]
                             # p, v = model(inputs)
                             p, v = self._build_dynamic_model(is_annotated, inputs)
-
+                            tf.summary.scalar('LENGTH OF IS_ANNOTATED:', len(list(is_annotated)))
+                            tf.summary.scalar('VALUE FUNCTION:', v)
                             assert NUM_DATA-len(is_annotated) > 0, 'Nothing to annotate'
                             a_t = tf.placeholder(tf.float32, shape=(None, 1+NUM_DATA-len(is_annotated)), name='a_t')
                             r_t = tf.placeholder(tf.float32, shape=(None, 1), name='r_t') # discounted n step reward
@@ -172,12 +174,16 @@ class Brain:
 
                             log_prob = tf.log( tf.reduce_sum(p * a_t, axis=1, keep_dims=True) + 1e-10, name='log_prob')
                             advantage = r_t - v
-
                             loss_policy = - log_prob * tf.stop_gradient(advantage)	# maximize policy
                             loss_value  = LOSS_V * tf.square(advantage)  # minimize value error
                             entropy = LOSS_ENTROPY * tf.reduce_sum(p * tf.log(p + 1e-10), axis=1, keep_dims=True, name='entropy')	# maximize entropy (regularization)
 
                             loss_total = tf.reduce_mean(loss_policy + loss_value + entropy, name='loss_total')
+                            tf.summary.scalar('LOG PROB: ', log_prob)
+                            tf.summary.scalar('ADVANTAGE: ', advantage)
+                            tf.summary.scalar('LOSS POLICY: ', loss_policy)
+                            tf.summary.scalar('LOSS VALUE: ', loss_value)
+                            tf.summary.scalar('TOTAL LOSS: ', loss_total)
                             # print 'TRAINABLE VARIABLES: ', ','.join([v.name for v in tf.trainable_variables()])
                             #with tf.variable_scope('optimizer', reuse=None) as scope:
                                 #optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99, name='MyRMSProp_graph')
@@ -264,11 +270,6 @@ class Brain:
 			s_batch, a_batch, r_batch, s__batch, s_mask_batch = self.train_queue
 			self.train_queue = [ [], [], [], [], [] ]
 
-                #TODO  Do the following
-                        # 1-Turn state and action to np.array
-                        # 2-Build the graph
-                        # 3-define loss -> minimize
-                        # 4-Feed run session on minimize
                 if len(s_batch) > 5*MIN_BATCH: 
                         print("Optimizer alert! Minimizing batch of %d" % len(s_batch))
                 
@@ -308,12 +309,9 @@ class Brain:
                                 feed_dict = {s_t[i]:probs[i].reshape(1,-1) for i in xrange(probs.shape[0])}
                                 feed_dict[a_t] = a.reshape(1,-1)
                                 feed_dict[r_t] = r.reshape(1,-1)
-                                #TODO: check if this thing initializes all the parameters? how to check? -> assert  "phi_s_model.fc1.weights before this line of code" == "after"
-                                # the code seems to skip this for loop
-                                #init_op = tf.global_variables_initializer()
-                                #self.sess.run(init_op )
-                                self.sess.run(minimize, feed_dict=feed_dict)
-                
+                                summary, loss = self.sess.run(minimize, feed_dict=feed_dict)
+                                self.
+
 	def train_push(self, s, a, r, s_):
 		with self.lock_queue:
 			self.train_queue[0].append(s)
@@ -498,7 +496,8 @@ class Optimizer(threading.Thread):
 	def run(self):
 		while not self.stop_signal:
 			brain.optimize(self.device)
-
+                        merged_train_summary = tf.summary.merge_all()
+                        train_writer.add_summary(merged_train_summary)
 	def stop(self):
 		self.stop_signal = True
 
