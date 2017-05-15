@@ -28,6 +28,8 @@ from gym.envs.registration import  register
 # register(id=ENV, entry_point='envs:ActiveLearningEnv')
 import tflearn
 from tflearn.layers import *
+import subprocess
+current_user = subprocess.check_output(['whoami']).strip()
 
 #-- constants
 ENV = 'ActiveLearningEnv-v0'
@@ -77,6 +79,8 @@ class Brain:
                 self.graph = tf.Graph()
                 self.sess = tf.Session(graph=self.graph, config=Brain.config)
                 self.rms_is_initialized = False
+                summaries_dir = '/local-scratch/'+current_user+'/rl-active/summaries/'
+                os.system('mkdir '+summaries_dir+' -p')
                 self.train_writer = tf.summary.FileWriter(summaries_dir + '/train', self.sess.graph)
                 self.test_writer = tf.summary.FileWriter(summaries_dir + '/test', self.sess.graph)
                 with self.sess.as_default():
@@ -309,8 +313,10 @@ class Brain:
                                 feed_dict = {s_t[i]:probs[i].reshape(1,-1) for i in xrange(probs.shape[0])}
                                 feed_dict[a_t] = a.reshape(1,-1)
                                 feed_dict[r_t] = r.reshape(1,-1)
-                                summary, loss = self.sess.run(minimize, feed_dict=feed_dict)
-                                self.
+                                merged_train_summary = tf.summary.merge_all()
+                                train_writer.add_summary(merged_train_summary)
+                                summary, loss = self.sess.run([merged_train_summary, minimize], feed_dict=feed_dict)
+                                self.train_writer.add_summary(summary)
 
 	def train_push(self, s, a, r, s_):
 		with self.lock_queue:
@@ -496,8 +502,6 @@ class Optimizer(threading.Thread):
 	def run(self):
 		while not self.stop_signal:
 			brain.optimize(self.device)
-                        merged_train_summary = tf.summary.merge_all()
-                        train_writer.add_summary(merged_train_summary)
 	def stop(self):
 		self.stop_signal = True
 

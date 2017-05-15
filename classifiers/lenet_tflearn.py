@@ -24,7 +24,7 @@ current_user = subprocess.check_output(['whoami']).strip()
 import yaml
 
 #i                   
-NUM_DATA = 50000
+NUM_DATA = 20
 class LeNetTF(BaseClassifier):
     '''
     Inspired from keras implementation of LeNet:
@@ -43,7 +43,7 @@ class LeNetTF(BaseClassifier):
         # tf_config.allow_soft_placement = True
         
         tf_config.allow_soft_placement = True 
-        tf_config.allow_growth = True
+        tf_config.gpu_options.allow_growth = True
         # tf_config.gpu_options.per_process_gpu_memory_fraction = 0.6
         # tf_config.log_device_placement = True
         self.tf_config=tf_config
