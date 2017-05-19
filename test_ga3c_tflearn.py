@@ -35,7 +35,7 @@ current_user = subprocess.check_output(['whoami']).strip()
 ENV = 'ActiveLearningEnv-v0'
 # gym.make(ENV)
 # exit()
-RUN_TIME =  60 
+RUN_TIME =  20 
 THREADS = 1
 OPTIMIZERS = 1
 THREAD_DELAY = 0.001
@@ -60,6 +60,7 @@ STATE_SIZE = 128
 NUM_CLASSES = 10
 NUM_DATA = 20
 #---------
+summaries_dir = '/local-scratch/'+current_user+'/rl-active/summaries/'
 class Brain:
 	train_queue = [ [], [], [], [], [] ]	# s, a, r, s', s' terminal mask
 	lock_queue = threading.Lock()
@@ -79,10 +80,9 @@ class Brain:
                 self.graph = tf.Graph()
                 self.sess = tf.Session(graph=self.graph, config=Brain.config)
                 self.rms_is_initialized = False
-                summaries_dir = '/local-scratch/'+current_user+'/rl-active/summaries/'
                 os.system('mkdir '+summaries_dir+' -p')
-                self.train_writer = tf.summary.FileWriter(summaries_dir + '/train', self.sess.graph)
-                self.test_writer = tf.summary.FileWriter(summaries_dir + '/test', self.sess.graph)
+                # self.test_writer = tf.summary.FileWriter(summaries_dir + '/test', self.sess.graph)
+                # self.train_writer = tf.summary.FileWriter(summaries_dir + '/train', self.sess.graph)
                 with self.sess.as_default():
                     with self.graph.as_default() as g:
                         l_input = input_data(shape=(None, NUM_CLASSES))
@@ -102,6 +102,8 @@ class Brain:
                         # self.sess.run(tf.global_variables_initializer())
                         self.sess.run(init)
                         print '+++++++  Done with Initializing'
+                        # self.write2 = tf.summary.FileWriter(summaries_dir + '/train2', self.sess.graph)
+                # self.train_writer = tf.summary.FileWriter(summaries_dir + '/train', self.sess.graph)
 		# self.default_graph = tf.get_default_graph()
 
 
@@ -163,14 +165,20 @@ class Brain:
                     with self.graph.as_default() as g:
                         print '+++++++BUILD GRAPH++++++++++++'
                         with tf.device(device): 
+                            summary_list = [] 
+                            summary_dict= {} 
                             probs, is_annotated = state
                             # tf.reset_default_graph()
                             # model = self._build_dynamic_model(is_annotated, device)
                             inputs = [tf.placeholder(tf.float32, shape=(None, NUM_CLASSES), name='input_prob_tensor_{}_'.format(_)) for _ in xrange(NUM_DATA)]
                             # p, v = model(inputs)
                             p, v = self._build_dynamic_model(is_annotated, inputs)
-                            tf.summary.scalar('LENGTH OF IS_ANNOTATED:', len(list(is_annotated)))
-                            tf.summary.scalar('VALUE FUNCTION:', v)
+                            # summary_list.append(tf.summary.scalar('LENGTH OF IS_ANNOTATED:', len(list(is_annotated))))
+                            # summary_list.append(tf.Summary(value=[tf.Summary.Value(tag='Length of is_annotated', simple_value=len(list(is_annotated)))]))
+                            print 'V vector::::::::::::::::::::::::', v
+                            # summary_list.append(tf.summary.scalar('VALUE FUNCTION:', v[0][0]))
+                            # summary = tf.Summary(value=[tf.Summary.Value(tag=tag, simple_value=value)])
+                            # summary_writer.add_summary(summary, global_step=i)
                             assert NUM_DATA-len(is_annotated) > 0, 'Nothing to annotate'
                             a_t = tf.placeholder(tf.float32, shape=(None, 1+NUM_DATA-len(is_annotated)), name='a_t')
                             r_t = tf.placeholder(tf.float32, shape=(None, 1), name='r_t') # discounted n step reward
@@ -183,11 +191,20 @@ class Brain:
                             entropy = LOSS_ENTROPY * tf.reduce_sum(p * tf.log(p + 1e-10), axis=1, keep_dims=True, name='entropy')	# maximize entropy (regularization)
 
                             loss_total = tf.reduce_mean(loss_policy + loss_value + entropy, name='loss_total')
-                            tf.summary.scalar('LOG PROB: ', log_prob)
-                            tf.summary.scalar('ADVANTAGE: ', advantage)
-                            tf.summary.scalar('LOSS POLICY: ', loss_policy)
-                            tf.summary.scalar('LOSS VALUE: ', loss_value)
-                            tf.summary.scalar('TOTAL LOSS: ', loss_total)
+
+                            summary_list.append(('Length of is_annotated',len(is_annotated)))
+                            summary_dict['Value Function'] = v 
+                            summary_dict['Log Prob'] = log_prob
+                            summary_dict['Advantage'] = advantage 
+                            summary_dict['Loss Policy'] = loss_policy 
+                            summary_dict['Loss Value'] = loss_value 
+                            summary_dict['Total Loss'] = loss_total 
+
+                            # summary_list.append(tf.summary.scalar('LOG PROB: ', tf.reduce_max(log_prob)))
+                            # summary_list.append(tf.summary.scalar('ADVANTAGE: ', tf.reduce_max(advantage)))
+                            # summary_list.append(tf.summary.scalar('LOSS POLICY: ', tf.reduce_max(loss_policy)))
+                            # summary_list.append(tf.summary.scalar('LOSS VALUE: ', tf.reduce_max(loss_value)))
+                            # summary_list.append(tf.summary.scalar('TOTAL LOSS: ', tf.reduce_max(loss_total)))
                             # print 'TRAINABLE VARIABLES: ', ','.join([v.name for v in tf.trainable_variables()])
                             #with tf.variable_scope('optimizer', reuse=None) as scope:
                                 #optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99, name='MyRMSProp_graph')
@@ -195,13 +212,15 @@ class Brain:
                             # print 'GLOBAL VARIABLES: ', [v.name for v in tf.global_variables() if 'RMS' in v.name]
                             minimize = self.graph_optimizer.minimize(loss_total)
                             if not self.rms_is_initialized:
-                                rms_vars= [v for v in tf.global_variables() if 'RMS' in v.name]
+                                rms_vars= [vi for vi in tf.global_variables() if 'RMS' in v.name]
                                 # print '++++++++ initializing these:', rms_vars
                                 init = tf.initialize_variables(rms_vars)
                                 self.sess.run(init)
                                 self.rms_is_initialized = True
                             # print 'LOCAL VARIABLES: ', [v.name for v in tf.local_variables() ]
-                            return inputs, a_t, r_t, minimize
+                            #self.train_writer = tf.summary.FileWriter(summaries_dir + '/train', self.sess.graph)
+                            # writer = tf.summary.FileWriter(summaries_dir + '/train', self.sess.graph)
+                            return inputs, a_t, r_t, minimize, summary_list, summary_dict
 
                     
         def _build_predict_graph(self, state):
@@ -305,7 +324,7 @@ class Brain:
                             with self.graph.as_default() as g:
                                 print '#### FROM OPTIMIZER ####'
                                 with tf.device(device):
-                                    s_t, a_t, r_t, minimize = self._build_graph(s, device)
+                                    s_t, a_t, r_t, minimize, summary_list, summary_dict = self._build_graph(s, device)
                                 print '#### DONE OPTIMIZER ####'
                                 probs,is_annotated = s
                                 # print 'OH', s_t[0]
@@ -313,10 +332,23 @@ class Brain:
                                 feed_dict = {s_t[i]:probs[i].reshape(1,-1) for i in xrange(probs.shape[0])}
                                 feed_dict[a_t] = a.reshape(1,-1)
                                 feed_dict[r_t] = r.reshape(1,-1)
-                                merged_train_summary = tf.summary.merge_all()
-                                train_writer.add_summary(merged_train_summary)
-                                summary, loss = self.sess.run([merged_train_summary, minimize], feed_dict=feed_dict)
-                                self.train_writer.add_summary(summary)
+                                # merged_train_summary = tf.summary.merge(summary_list)
+                                # self.train_writer.add_summary(merged_train_summary,0)
+                                if not hasattr(self, 'train_writer'):
+                                    print 'Creating Train Writer'
+                                    self.train_writer = tf.summary.FileWriter(summaries_dir + '/train', self.sess.graph)
+                                    self.iteration = 0
+
+                                # summary, loss = self.sess.run([merged_train_summary, minimize], feed_dict=feed_dict)
+                                iteritems = summary_dict.iteritems()
+                                summaries, loss = self.sess.run([val for key,val in iteritems]+[ minimize], feed_dict=feed_dict)
+                                
+                                # print '******************** THIS IS SUMMARY *********************', summary
+                                for i in xrange(len(summaries)):
+                                    summary = tf.Summary(value=[tf.Summary.Value(tag=iteritems[i][0], simple_value=summaries[0])])
+                                    self.train_writer.add_summary(summary,self.iteration)
+                                self.iteration += 1
+                                # exit()
 
 	def train_push(self, s, a, r, s_):
 		with self.lock_queue:
