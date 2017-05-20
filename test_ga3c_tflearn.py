@@ -36,8 +36,8 @@ ENV = 'ActiveLearningEnv-v0'
 # gym.make(ENV)
 # exit()
 RUN_TIME =  20 
-THREADS = 1
-OPTIMIZERS = 1
+THREADS = 4
+OPTIMIZERS = 4
 THREAD_DELAY = 0.001
 
 GAMMA = 0.99
@@ -60,7 +60,6 @@ STATE_SIZE = 128
 NUM_CLASSES = 10
 NUM_DATA = 20
 #---------
-summaries_dir = '/local-scratch/'+current_user+'/rl-active/summaries/'
 class Brain:
 	train_queue = [ [], [], [], [], [] ]	# s, a, r, s', s' terminal mask
 	lock_queue = threading.Lock()
@@ -80,7 +79,6 @@ class Brain:
                 self.graph = tf.Graph()
                 self.sess = tf.Session(graph=self.graph, config=Brain.config)
                 self.rms_is_initialized = False
-                os.system('mkdir '+summaries_dir+' -p')
                 # self.test_writer = tf.summary.FileWriter(summaries_dir + '/test', self.sess.graph)
                 # self.train_writer = tf.summary.FileWriter(summaries_dir + '/train', self.sess.graph)
                 with self.sess.as_default():
@@ -209,10 +207,14 @@ class Brain:
                             #with tf.variable_scope('optimizer', reuse=None) as scope:
                                 #optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99, name='MyRMSProp_graph')
                                 #tf.initialize_variables(optimizer)
-                            # print 'GLOBAL VARIABLES: ', [v.name for v in tf.global_variables() if 'RMS' in v.name]
                             minimize = self.graph_optimizer.minimize(loss_total)
+                            # print 'GLOBAL VARIABLES: ', [v.name for v in tf.global_variables() ]
+                            # rms_v = [v.name for v in tf.global_variables() if 'RMS' in v.name]
+                            # print 'GLOBAL VARIABLES (RMS): ' 
+                            # print 'GLOBAL VARIABLES (RMS): ', [v.name for v in tf.global_variables() if 'RMS' in v.name]
                             if not self.rms_is_initialized:
-                                rms_vars= [vi for vi in tf.global_variables() if 'RMS' in v.name]
+                                print '+++ INITIALIZING+++'
+                                rms_vars= [vi for vi in tf.global_variables() if 'RMS' in vi.name]
                                 # print '++++++++ initializing these:', rms_vars
                                 init = tf.initialize_variables(rms_vars)
                                 self.sess.run(init)
@@ -336,17 +338,31 @@ class Brain:
                                 # self.train_writer.add_summary(merged_train_summary,0)
                                 if not hasattr(self, 'train_writer'):
                                     print 'Creating Train Writer'
+                                     
                                     self.train_writer = tf.summary.FileWriter(summaries_dir + '/train', self.sess.graph)
                                     self.iteration = 0
 
                                 # summary, loss = self.sess.run([merged_train_summary, minimize], feed_dict=feed_dict)
-                                iteritems = summary_dict.iteritems()
-                                summaries, loss = self.sess.run([val for key,val in iteritems]+[ minimize], feed_dict=feed_dict)
-                                
+                                iteritems = [(key,val) for key, val in summary_dict.iteritems()]
+                                # loss = self.sess.run([ minimize], feed_dict=feed_dict)
+                                print iteritems
+                                what_to_minimize = []
+                                for key, val in iteritems:
+                                    what_to_minimize.append(val)
+                                what_to_minimize.append(minimize)
+                                summaries= self.sess.run(what_to_minimize, feed_dict=feed_dict)
+                                summaries = summaries[:-1]
+                                # exit() 
                                 # print '******************** THIS IS SUMMARY *********************', summary
-                                for i in xrange(len(summaries)):
-                                    summary = tf.Summary(value=[tf.Summary.Value(tag=iteritems[i][0], simple_value=summaries[0])])
+                                for key,val in summary_list:
+                                    summary = tf.Summary(value=[tf.Summary.Value(tag=key, simple_value=val)])
                                     self.train_writer.add_summary(summary,self.iteration)
+                                    print '------++++++++ SUMMARY: {0}:{1}'.format(key, val)
+                                for i in xrange(len(summaries)):
+                                    summary = tf.Summary(value=[tf.Summary.Value(tag=iteritems[i][0], simple_value=summaries[i])])
+                                    print 'SUMMARY: {0}:{1}'.format(iteritems[i][0], summaries[i])
+                                    self.train_writer.add_summary(summary,self.iteration)
+                                
                                 self.iteration += 1
                                 # exit()
 
@@ -545,7 +561,23 @@ class Optimizer(threading.Thread):
 # NUM_ACTIONS = env_test.env.action_space.n
 NONE_STATE = np.zeros(STATE_SIZE)
 
+if len(sys.argv) != 2:
+    raise Exception('Experiment name not provided!')
+EXP_NAME = sys.argv[2]
+summaries_dir = '/local-scratch/'+current_user+'/rl-active/'+EXP_NAME+'/summaries/'
+THREADS = 1
+OPTIMIZERS = 1
+AGENT_SUMMARY_DIRS = []
+for i in xrange(THREADS):
+    AGENT_SUMMARY_DIRS.append(summaries_dir+'agent_'+str(i)+'/')
+    os.system('mkdir '+AGENT_SUMMARY_DIRS[i]+' -p')
+OPTIMIZERS_SUMMARY_DIRS =[]
+for i in xrange(OPTIMIZERS):
+    OPTIMIZERS_SUMMARY_DIRS.append(summaries_dir+'optimizer_'+str(i)+'/')
+    os.system('mkdir '+OPTIMIZERS_SUMMARY_DIRS[i]+' -p')
+
 brain = Brain()	# brain is global in A3C
+
 # exit()
 def gen_s():
     s = np.random.rand(NUM_DATA, NUM_CLASSES) 
@@ -566,10 +598,10 @@ def gen_s():
 # a = brain._build_graph(s,'/gpu:0')
 # a = brain.predict(s, '/gpu:0')
 # brain.optimize('/gpu:0')
-envs = [Environment(device='/gpu:{}'.format(i+2)) for i in range(THREADS)]
+envs = [Environment(device='/gpu:{}'.format(i)) for i in range(THREADS)]
 # envs = [Environment('/gpu:'+str(i%4)) for i in range(THREADS)]
 
-opts = [Optimizer(device='/gpu:2') for i in range(OPTIMIZERS)]
+opts = [Optimizer(device='/gpu:{}'.format(i)) for i in range(OPTIMIZERS)]
 # opts = [Optimizer('/gpu:'+str(i%4)) for i in range(OPTIMIZERS)]
 
 # op = Optimizer(device='/gpu:0')
