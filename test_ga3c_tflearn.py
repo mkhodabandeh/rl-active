@@ -35,7 +35,7 @@ current_user = subprocess.check_output(['whoami']).strip()
 ENV = 'ActiveLearningEnv-v0'
 # gym.make(ENV)
 # exit()
-RUN_TIME =  20 
+RUN_TIME =  48*60*60 
 THREADS = 4
 OPTIMIZERS = 4
 THREAD_DELAY = 0.001
@@ -58,7 +58,7 @@ LOSS_ENTROPY = .01 	# entropy coefficient
 
 STATE_SIZE = 128
 NUM_CLASSES = 10
-NUM_DATA = 20
+NUM_DATA = 20 
 #---------
 class Brain:
 	train_queue = [ [], [], [], [], [] ]	# s, a, r, s', s' terminal mask
@@ -79,6 +79,8 @@ class Brain:
                 self.graph = tf.Graph()
                 self.sess = tf.Session(graph=self.graph, config=Brain.config)
                 self.rms_is_initialized = False
+                self.iteration = {}
+                self.train_writer = {}
                 # self.test_writer = tf.summary.FileWriter(summaries_dir + '/test', self.sess.graph)
                 # self.train_writer = tf.summary.FileWriter(summaries_dir + '/train', self.sess.graph)
                 with self.sess.as_default():
@@ -193,10 +195,10 @@ class Brain:
                             summary_list.append(('Length of is_annotated',len(is_annotated)))
                             summary_dict['Value Function'] = v 
                             summary_dict['Log Prob'] = log_prob
-                            summary_dict['Advantage'] = advantage 
-                            summary_dict['Loss Policy'] = loss_policy 
-                            summary_dict['Loss Value'] = loss_value 
-                            summary_dict['Total Loss'] = loss_total 
+                            summary_dict['Advantage'] = advantage
+                            summary_dict['Loss Policy'] = loss_policy
+                            summary_dict['Loss Value'] = loss_value
+                            summary_dict['Total Loss'] = loss_total
 
                             # summary_list.append(tf.summary.scalar('LOG PROB: ', tf.reduce_max(log_prob)))
                             # summary_list.append(tf.summary.scalar('ADVANTAGE: ', tf.reduce_max(advantage)))
@@ -286,7 +288,7 @@ class Brain:
                         out_action = fully_connected(l_concat, 1, activation='linear', name='out_action_')
                         return out_action
 
-	def optimize(self, device):
+	def optimize(self, device, optimizer_id):
 		if len(self.train_queue[0]) < MIN_BATCH:
 			time.sleep(0)	# yield
 			return
@@ -336,13 +338,15 @@ class Brain:
                                 feed_dict[r_t] = r.reshape(1,-1)
                                 # merged_train_summary = tf.summary.merge(summary_list)
                                 # self.train_writer.add_summary(merged_train_summary,0)
-                                if not hasattr(self, 'train_writer'):
+                                if optimizer_id not in self.train_writer:
                                     print 'Creating Train Writer'
-                                     
-                                    self.train_writer = tf.summary.FileWriter(summaries_dir + '/train', self.sess.graph)
-                                    self.iteration = 0
+                                    self.train_writer[optimizer_id] =   tf.summary.FileWriter(OPTIMIZERS_SUMMARY_DIRS[optimizer_id], self.sess.graph)
+
+                                    self.iteration[optimizer_id] = 0
 
                                 # summary, loss = self.sess.run([merged_train_summary, minimize], feed_dict=feed_dict)
+                                train_writer = self.train_writer[optimizer_id]
+                                iteration = self.iteration[optimizer_id]
                                 iteritems = [(key,val) for key, val in summary_dict.iteritems()]
                                 # loss = self.sess.run([ minimize], feed_dict=feed_dict)
                                 print iteritems
@@ -356,14 +360,14 @@ class Brain:
                                 # print '******************** THIS IS SUMMARY *********************', summary
                                 for key,val in summary_list:
                                     summary = tf.Summary(value=[tf.Summary.Value(tag=key, simple_value=val)])
-                                    self.train_writer.add_summary(summary,self.iteration)
+                                    train_writer.add_summary(summary,iteration)
                                     print '------++++++++ SUMMARY: {0}:{1}'.format(key, val)
                                 for i in xrange(len(summaries)):
                                     summary = tf.Summary(value=[tf.Summary.Value(tag=iteritems[i][0], simple_value=summaries[i])])
                                     print 'SUMMARY: {0}:{1}'.format(iteritems[i][0], summaries[i])
-                                    self.train_writer.add_summary(summary,self.iteration)
+                                    train_writer.add_summary(summary,iteration)
                                 
-                                self.iteration += 1
+                                self.iteration[optimizer_id] += 1
                                 # exit()
 
 	def train_push(self, s, a, r, s_):
@@ -484,15 +488,17 @@ class Agent:
 class Environment(threading.Thread):
 	stop_signal = False
 
-	def __init__(self, render=False, eps_start=EPS_START, eps_end=EPS_STOP, eps_steps=EPS_STEPS, device=None):
+	def __init__(self, render=False, eps_start=EPS_START, eps_end=EPS_STOP, eps_steps=EPS_STEPS, device=None, agent_id=None):
 		threading.Thread.__init__(self)
 		self.device = device
 		self.render = render
                 self.env = ActiveLearningEnv(device=device)
 		# self.env = gym.make(ENV)
+                
                 self.env.device = device
 		self.agent = Agent(eps_start, eps_end, eps_steps,device)
-
+                self.agent_id = agent_id
+                self.iteration = 0
 	def runEpisode(self):
 		s = self.env.reset()
 
@@ -508,13 +514,21 @@ class Environment(threading.Thread):
                         num_actions = 1+NUM_DATA-len(is_annotated)
                         not_annotated = set(range(NUM_DATA)).difference(is_annotated)
                         not_annotated = sorted(not_annotated)
+                        if not hasattr(self, 'train_writer'):
+                            self.train_writer =   tf.summary.FileWriter(AGENT_SUMMARY_DIRS[self.agent_id], tf.get_default_graph())
                         if a == num_actions-1:
                             action = (0, True)
                         else:
                             action = (not_annotated[a], False)
                         ######
+                        summary = tf.Summary(value=[tf.Summary.Value(tag='action', simple_value=action[0])])
+                        self.train_writer.add_summary(summary,self.iteration)
+                        summary = tf.Summary(value=[tf.Summary.Value(tag='is_action_train', simple_value=action[1])])
+                        self.train_writer.add_summary(summary,self.iteration)
+                        self.iteration+=1
 			s_, r, done, info = self.env.step(action)
-
+                        summary = tf.Summary(value=[tf.Summary.Value(tag='reward', simple_value=r)])
+                        self.train_writer.add_summary(summary,self.iteration)
                         probs,is_annotated = s_
                         assert probs.shape[0] == NUM_DATA
                         #TODO REMOVE NEXT 3 lines
@@ -543,13 +557,13 @@ class Environment(threading.Thread):
 class Optimizer(threading.Thread):
 	stop_signal = False
 
-	def __init__(self,device=None):
+	def __init__(self,device=None, optimizer_id=None):
 		threading.Thread.__init__(self)
                 self.device = device
-
+                self.optimizer_id = optimizer_id
 	def run(self):
 		while not self.stop_signal:
-			brain.optimize(self.device)
+			brain.optimize(self.device, self.optimizer_id)
 	def stop(self):
 		self.stop_signal = True
 
@@ -563,10 +577,9 @@ NONE_STATE = np.zeros(STATE_SIZE)
 
 if len(sys.argv) != 2:
     raise Exception('Experiment name not provided!')
-EXP_NAME = sys.argv[2]
+EXP_NAME = sys.argv[1]
 summaries_dir = '/local-scratch/'+current_user+'/rl-active/'+EXP_NAME+'/summaries/'
-THREADS = 1
-OPTIMIZERS = 1
+
 AGENT_SUMMARY_DIRS = []
 for i in xrange(THREADS):
     AGENT_SUMMARY_DIRS.append(summaries_dir+'agent_'+str(i)+'/')
@@ -598,10 +611,10 @@ def gen_s():
 # a = brain._build_graph(s,'/gpu:0')
 # a = brain.predict(s, '/gpu:0')
 # brain.optimize('/gpu:0')
-envs = [Environment(device='/gpu:{}'.format(i)) for i in range(THREADS)]
+envs = [Environment(device='/gpu:{}'.format(i),agent_id=i) for i in range(THREADS)]
 # envs = [Environment('/gpu:'+str(i%4)) for i in range(THREADS)]
 
-opts = [Optimizer(device='/gpu:{}'.format(i)) for i in range(OPTIMIZERS)]
+opts = [Optimizer(device='/gpu:{}'.format(i), optimizer_id=i) for i in range(OPTIMIZERS)]
 # opts = [Optimizer('/gpu:'+str(i%4)) for i in range(OPTIMIZERS)]
 
 # op = Optimizer(device='/gpu:0')

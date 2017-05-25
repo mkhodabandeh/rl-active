@@ -68,10 +68,11 @@ class ActiveLearningEnv(gym.Env):
 
     def _compute_reward(self, acc_gain=None):
         #TODO: define reward
-        if acc_gain:
-            return acc_gain
+        if acc_gain is not None:
+            return 100
+            # return acc_gain
         else:
-            return -1
+            return -100
 
     def _step(self, action):
         label_i, do_train = action #action is a Tuple ( int, boolean)
