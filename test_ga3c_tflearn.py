@@ -36,8 +36,8 @@ ENV = 'ActiveLearningEnv-v0'
 # gym.make(ENV)
 # exit()
 RUN_TIME =  48*60*60 
-THREADS = 4
-OPTIMIZERS = 4
+THREADS = 7
+OPTIMIZERS = 1
 THREAD_DELAY = 0.001
 
 GAMMA = 0.99
@@ -58,18 +58,20 @@ LOSS_ENTROPY = .01 	# entropy coefficient
 
 STATE_SIZE = 128
 NUM_CLASSES = 10
-NUM_DATA = 20 
+NUM_DATA = 200 
 #---------
 class Brain:
 	train_queue = [ [], [], [], [], [] ]	# s, a, r, s', s' terminal mask
 	lock_queue = threading.Lock()
 	lock_graph = threading.Lock()
-        with tf.device('/gpu:2'):
-            config = tf.ConfigProto()
-            config.allow_soft_placement = True
-            config.log_device_placement = False
-            config.gpu_options.allow_growth=True
-            # config.gpu_options.per_process_gpu_memory_fraction = 0.3
+        with tf.device('/cpu:7'):
+            config = tf.ConfigProto(device_count={'CPU':8}, 
+                                        inter_op_parallelism_threads=8,
+                                        intra_op_parallelism_threads=1)
+            # config = tf.ConfigProto()
+            # config.allow_soft_placement = True
+            # config.log_device_placement = False
+            # config.gpu_options.allow_growth=True
 
 	def __init__(self):
 		#K.manual_variable_initialization(True)
@@ -387,7 +389,7 @@ class Brain:
 		# print(state)
                 probs, is_annotated = state
                 # tf.reset_default_graph()
-                print 'is_annotated =', is_annotated
+                print '[device=',device,'] is_annotated =', is_annotated
                 # model = self._build_dynamic_model(is_annotated, device)
                 # self.session.run(tf.global_variables_initializer())
                 # print 'probs', probs
@@ -438,7 +440,8 @@ class Agent:
                 num_actions = NUM_DATA - len(s[1])+1
                 # print 'in act, s', s
 		if random.random() < eps:
-			return random.randint(0, num_actions-1)
+			# return (random.randint(0, num_actions-1), True)
+                        return (num_actions-1, True)
 
 		else:
 			# s = np.array([s])
@@ -446,7 +449,7 @@ class Agent:
 
 			# a = np.argmax(p)
 			a = np.random.choice(num_actions, p=p)
-			return a 
+			return (a, False)
 	
 	def train(self, s, a, r, s_):
 		def get_sample(memory, n):
@@ -492,12 +495,14 @@ class Environment(threading.Thread):
 		threading.Thread.__init__(self)
 		self.device = device
 		self.render = render
-                self.env = ActiveLearningEnv(device=device)
+                # self.env = ActiveLearningEnv(device='/gpu:0')
+                self.agent_id = agent_id
+                self.train_writer =   tf.summary.FileWriter(AGENT_SUMMARY_DIRS[self.agent_id], tf.get_default_graph())
+                self.env = ActiveLearningEnv(device=device, summary_writer=self.train_writer)
 		# self.env = gym.make(ENV)
                 
                 self.env.device = device
 		self.agent = Agent(eps_start, eps_end, eps_steps,device)
-                self.agent_id = agent_id
                 self.iteration = 0
 	def runEpisode(self):
 		s = self.env.reset()
@@ -508,14 +513,12 @@ class Environment(threading.Thread):
 
 			if self.render: self.env.render()
 
-			a = self.agent.act(s)
+			a,is_random = self.agent.act(s)
                         #change action to environment type action
                         is_annotated = s[1]
                         num_actions = 1+NUM_DATA-len(is_annotated)
                         not_annotated = set(range(NUM_DATA)).difference(is_annotated)
                         not_annotated = sorted(not_annotated)
-                        if not hasattr(self, 'train_writer'):
-                            self.train_writer =   tf.summary.FileWriter(AGENT_SUMMARY_DIRS[self.agent_id], tf.get_default_graph())
                         if a == num_actions-1:
                             action = (0, True)
                         else:
@@ -523,7 +526,9 @@ class Environment(threading.Thread):
                         ######
                         summary = tf.Summary(value=[tf.Summary.Value(tag='action', simple_value=action[0])])
                         self.train_writer.add_summary(summary,self.iteration)
-                        summary = tf.Summary(value=[tf.Summary.Value(tag='is_action_train', simple_value=action[1])])
+                        summary = tf.Summary(value=[tf.Summary.Value(tag='is_action_train', simple_value=5.0 if action[1] else -5.0)])
+                        self.train_writer.add_summary(summary,self.iteration)
+                        summary = tf.Summary(value=[tf.Summary.Value(tag='is_random_action', simple_value=5.0 if is_random else -5.0)])
                         self.train_writer.add_summary(summary,self.iteration)
                         self.iteration+=1
 			s_, r, done, info = self.env.step(action)
@@ -611,11 +616,10 @@ def gen_s():
 # a = brain._build_graph(s,'/gpu:0')
 # a = brain.predict(s, '/gpu:0')
 # brain.optimize('/gpu:0')
-envs = [Environment(device='/gpu:{}'.format(i),agent_id=i) for i in range(THREADS)]
-# envs = [Environment('/gpu:'+str(i%4)) for i in range(THREADS)]
-
-opts = [Optimizer(device='/gpu:{}'.format(i), optimizer_id=i) for i in range(OPTIMIZERS)]
-# opts = [Optimizer('/gpu:'+str(i%4)) for i in range(OPTIMIZERS)]
+# envs = [Environment(device='/gpu:{}'.format(i),agent_id=i) for i in range(THREADS)]
+envs = [Environment(device='/cpu:{}'.format(i),agent_id=i) for i in range(THREADS)]
+opts = [Optimizer(device='/cpu:{}'.format(i+7), optimizer_id=i) for i in range(OPTIMIZERS)]
+# opts = [Optimizer(device='/gpu:{}'.format(i), optimizer_id=i) for i in range(OPTIMIZERS)]
 
 # op = Optimizer(device='/gpu:0')
 

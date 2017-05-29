@@ -24,7 +24,7 @@ current_user = subprocess.check_output(['whoami']).strip()
 import yaml
 
 #i                   
-NUM_DATA = 20
+NUM_DATA = 200
 class LeNetTF(BaseClassifier):
     '''
     Inspired from keras implementation of LeNet:
@@ -39,11 +39,17 @@ class LeNetTF(BaseClassifier):
     count = 0
     def __init__(self, config_path=None, device=None):
         self.device = device
-        tf_config = tf.ConfigProto(device_count={'GPU':1})
+
         # tf_config.allow_soft_placement = True
         
-        tf_config.allow_soft_placement = True 
-        tf_config.gpu_options.allow_growth = True
+        if 'gpu' in device:
+            tf_config = tf.ConfigProto(device_count={'GPU':1})
+            tf_config.allow_soft_placement = True 
+            tf_config.gpu_options.allow_growth = True
+        else:
+            tf_config = tf.ConfigProto(device_count={'CPU':8}, 
+                                        inter_op_parallelism_threads=8,
+                                        intra_op_parallelism_threads=1)
         # tf_config.gpu_options.per_process_gpu_memory_fraction = 0.6
         # tf_config.log_device_placement = True
         self.tf_config=tf_config
@@ -95,70 +101,75 @@ class LeNetTF(BaseClassifier):
 
 
     def _train(self, data=None):
-        print('Creating MNIST model...')
+        print('[lenet_tflearn]Creating MNIST model...')
         if self.is_annotated:
             x_train = self.x_train[list(self.is_annotated)]
             y_train = self.y_train[list(self.is_annotated)]
         else:
             x_train = self.x_train
             y_train = self.y_train
-        print x_train.shape
-        print y_train.shape
+        # print x_train.shape
+        # print y_train.shape
         #with self.sess.as_default():
         try:
             with self.graph.as_default() as g:
-                self.model.fit({'lenet_input': x_train}, {'target': y_train}, n_epoch=1, validation_set=({'lenet_input': self.x_test}, {'target': self.y_test}), batch_size=self.batch_size, snapshot_step=100, show_metric=True, run_id='convnet_mnist')
+                print '[lenet_tflearn.py::_train] size of input', x_train.shape 
+                with tf.device(self.device):
+                    self.model.fit({'lenet_input': x_train}, {'target': y_train}, n_epoch=1, validation_set=({'lenet_input': self.x_test}, {'target': self.y_test}), batch_size=self.batch_size, snapshot_step=100, show_metric=True, run_id='convnet_mnist')
         except Exception as e:
-            print x_train.shape, y_train.shape
+            print '[lenet_tflearn]EXCEPTION', x_train.shape, y_train.shape
             raise e
             # exit()
         # return self._predict(self.x_train)
         return self._predict(self.x_train)
 
     def _predict(self, data=None):
-        print('Doing Predictions...')
+        print('[lenet_tflearn]Doing Predictions...')
         with self.sess.as_default():
             with self.graph.as_default() as g:
-                if data is None:
-                    data = self.x_train
+                with tf.device(self.device):
+                    if data is None:
+                        data = self.x_train
 
-                arr = np.zeros((self.x_train.shape[0], self.num_classes))
-                # print arr.shape
-                batch_size = 128
-                for i in xrange(self.x_train.shape[0]/batch_size):
-                    # arr[i*batch_size:(i+1)*batch_size,...] =  
-                    temp = np.array(self.model.predict({'lenet_input': self.x_train[i*batch_size:(i+1)*batch_size, ...]}))
-                    # print temp.shape
-                    arr[i*batch_size:(i+1)*batch_size, ...] = temp
-                    # print i*batch_size, (i+1)*batch_size
-                    # print temp.shape
-                    # print temp[0:2, ...]
-                    # pdb.set_trace()
-                # print (i+1)*batch_size, self.x_train.shape[0]
-                i = self.x_train.shape[0]/batch_size
-                if (i)*batch_size != self.x_train.shape[0]:
-                    # print 'hi'
-                    temp = np.array(self.model.predict({'lenet_input': self.x_train[(i)*batch_size:, ...]}))
-                    arr[(i)*batch_size:, ...] = temp
+                    arr = np.zeros((self.x_train.shape[0], self.num_classes))
+                    # print arr.shape
+                    batch_size = 128
+                    for i in xrange(self.x_train.shape[0]/batch_size):
+                        # arr[i*batch_size:(i+1)*batch_size,...] =  
+                        temp = np.array(self.model.predict({'lenet_input': self.x_train[i*batch_size:(i+1)*batch_size, ...]}))
+                        # print temp.shape
+                        arr[i*batch_size:(i+1)*batch_size, ...] = temp
+                        # print i*batch_size, (i+1)*batch_size
+                        # print temp.shape
+                        # print temp[0:2, ...]
+                        # pdb.set_trace()
+                    # print (i+1)*batch_size, self.x_train.shape[0]
+                    i = self.x_train.shape[0]/batch_size
+                    if (i)*batch_size != self.x_train.shape[0]:
+                        # print 'hi'
+                        temp = np.array(self.model.predict({'lenet_input': self.x_train[(i)*batch_size:, ...]}))
+                        arr[(i)*batch_size:, ...] = temp
 
-                # return np.array(self.model.predict({'lenet_input': self.x_train}))
-                return arr
+                    # return np.array(self.model.predict({'lenet_input': self.x_train}))
+                    return arr
 
     def _evaluate(self, data=None):
-        print('Getting Accuracy...')
+        print('[lenet_tflearn]Getting Accuracy...')
         with self.sess.as_default():
             with self.graph.as_default() as g:
                 if data is None:
                     self._get_default_data()
                 else:
                     self._get_nondefault_data(data)
-                score = self.model.evaluate(self.x_test, self.y_test, batch_size=128)
-        return score
+                with tf.device(self.device):
+                    print '[lenet_tflearn] evaluating'
+                    score = self.model.evaluate(self.x_test, self.y_test, batch_size=128)
+                    return score
 
     def _create_model(self):
         # self.graph = tf.Graph()
         # self.sess = tf.Session(graph=self.graph, config=self.tf_config)
-        print 'DEVICE IS', self.device
+        print '[lenet_tflearn]: DEVICE IS', self.device
         with tf.device(self.device):
             with self.graph.as_default() as g:
                 network = input_data(shape=[None, 28, 28, 1], name='lenet_input')

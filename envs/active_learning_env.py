@@ -11,7 +11,7 @@ from gym.utils import closer
 # env_closer = closer.Closer()
 
 # Env-related abstractions
-
+import tensorflow as tf
 class ActiveLearningEnv(gym.Env):
     """The main OpenAI Gym class. It encapsulates an environment with
     arbitrary behind-the-scenes dynamics. An environment can be
@@ -41,12 +41,14 @@ class ActiveLearningEnv(gym.Env):
     metadata = {'render.modes': []}
     reward_range = (-np.inf, np.inf)
 
-    def __init__(self, classifier_name='LeNet_TF', dataset_name='MNist', device=None):
+    def __init__(self, classifier_name='LeNet_TF', dataset_name='MNist', device=None, summary_writer=None):
         self.classifier_name = classifier_name
         self.dataset_name = dataset_name
         config_path = ''
         self.config_path = config_path
         self.device = device
+        self.summary_writer = summary_writer
+        self.iteration = 0
         self.classifier = ClassifierFactory.get_classifier(classifier_name,  dataset_name, config_path, device)
         self.n = self.classifier.get_train_n()
         self.k = self.classifier.get_class_n()
@@ -69,10 +71,10 @@ class ActiveLearningEnv(gym.Env):
     def _compute_reward(self, acc_gain=None):
         #TODO: define reward
         if acc_gain is not None:
-            return 100
-            # return acc_gain
+            # return 100
+            return acc_gain - self.new_annotations
         else:
-            return -100
+            return 4 - 2*self.new_annotations 
 
     def _step(self, action):
         label_i, do_train = action #action is a Tuple ( int, boolean)
@@ -81,6 +83,9 @@ class ActiveLearningEnv(gym.Env):
             self.probs = self.classifier.train()
             acc = self.classifier.evaluate()
             acc = acc[0]
+            self.new_annotations  = 0
+            summary = tf.Summary(value=[tf.Summary.Value(tag='validation_accuracy', simple_value=acc)])
+            self.summary_writer.add_summary(summary,self.iteration)
             # print acc
             # save best validation
             acc_gain = acc - self.previous_acc 
@@ -91,8 +96,12 @@ class ActiveLearningEnv(gym.Env):
             reward = self._compute_reward(acc_gain) 
 
         else:
+            self.new_annotations += 1
+            summary = tf.Summary(value=[tf.Summary.Value(tag='validation_accuracy', simple_value=0)])
+            self.summary_writer.add_summary(summary,self.iteration)
             self.is_annotated.add(label_i)
             reward = self._compute_reward()
+        self.iteration += 1
         done = len(self.is_annotated) == self.max_annotations
         return (self.probs.copy(), self.is_annotated.copy()), reward, done, None 
 
