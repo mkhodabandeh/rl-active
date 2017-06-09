@@ -13,7 +13,7 @@ sys.stdout.flush()
 import numpy as np
 sys.stdout.flush()
 
-import os
+import os, yaml
 # os.environ['TF_CPP_MIN_LOG_LEVEL']='3'
 import tensorflow as tf
 tf.logging.set_verbosity(tf.logging.INFO)
@@ -31,34 +31,13 @@ from tflearn.layers import *
 import subprocess
 current_user = subprocess.check_output(['whoami']).strip()
 
-#-- constants
-ENV = 'ActiveLearningEnv-v0'
-# gym.make(ENV)
-# exit()
-RUN_TIME =  48*60*60 
-THREADS = 7
-OPTIMIZERS = 1
-THREAD_DELAY = 0.001
+config = yaml.load(open('config.yml'))
+rl_args = config['RL']
+classifier_args = config['classifiers']
 
-GAMMA = 0.99
-
-N_STEP_RETURN = 8
-GAMMA_N = GAMMA ** N_STEP_RETURN
-
-EPS_START = 0.4
-EPS_STOP  = .05
-EPS_STEPS = 75000
-
-# MIN_BATCH = 32
-MIN_BATCH = 5 
-LEARNING_RATE = 5e-3
-
-LOSS_V = .5			# v loss coefficient
-LOSS_ENTROPY = .01 	# entropy coefficient
-
-STATE_SIZE = 128
-NUM_CLASSES = 10
-NUM_DATA = 200 
+locals().update(rl_args)
+print sys.argv[2]
+exit()
 #---------
 class Brain:
 	train_queue = [ [], [], [], [], [] ]	# s, a, r, s', s' terminal mask
