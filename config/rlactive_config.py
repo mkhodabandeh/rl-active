@@ -12,7 +12,7 @@ def PromptRLConfig(args):
     args.GAMMA_N = args.GAMMA ** args.N_STEP_RETURN
     rl_argdict = {}
     for key in relevant_args: rl_argdict.update({key:getattr(args, key)})
-
+    del rl_argdict['NUM_DATA']
     return rl_argdict
 
 def PromptClassifierConfig(args):
@@ -29,7 +29,7 @@ def SharedConfig(args):
 
 if __name__ == '__main__':
     parser = ArgumentParser()
-    parser.add_argument('--NUM_DATA', type=int, default=1000,help='number of training images')
+    parser.add_argument('--NUM_DATA', type=int, default=200,help='number of training images')
     parser.add_argument('--DATASET', type=str, default='MNIST', help='Dataset name')
     parser.add_argument('--ENV', type=str, default='ActiveLearningEnv-v0', help='environment name')
     parser.add_argument('--OUTPUT_YAML', type=str, default='config.yml', help='yaml config filename')
