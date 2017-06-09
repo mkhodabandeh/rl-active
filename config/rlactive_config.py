@@ -74,4 +74,5 @@ if __name__ == '__main__':
         classifier_argdict = {'classifiers': classifier_argdict}
         ordered_dump(classifier_argdict, stream=yaml_obj, default_flow_style=False)
     shared_argdict = {'SHARED': shared_argdict}
+    ordered_dump(shared_argdict, stream=yaml_obj, default_flow_style=False)
     yaml_obj.close()
