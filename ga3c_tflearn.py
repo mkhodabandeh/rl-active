@@ -76,7 +76,7 @@ class Brain:
                         # with tf.variable_scope('pi_model') as scope:
                         pi_tmp = self._build_pi_model(phi_s_tmp, l_input, None)
                         v_tmp = self._build_v_model(phi_s_tmp, None)
-                        v_tmp = self._build_termination_action_model(phi_s_tmp, None)
+                        #v_tmp = self._build_termination_action_model(phi_s_tmp, None)
                         with tf.variable_scope('graph_optimizer', reuse=None) as scope:
                             self.graph_optimizer = tf.train.RMSPropOptimizer(LEARNING_RATE, decay=.99, name='GraphRMSProp')
                         try:
@@ -137,8 +137,8 @@ class Brain:
                             pi_outputs.append(pi_i)
                             # scope.reuse_variables()
 
-                        termination_action = self._build_termination_action_model(phi_state)
-                        pi_outputs.append(termination_action)
+                        #termination_action = self._build_termination_action_model(phi_state)
+                        #pi_outputs.append(termination_action)
 
                         action_concat = merge(pi_outputs, 'concat', axis=1, name='concatenate_PIs')
                         out_actions = tflearn.activations.softmax(action_concat)
@@ -421,18 +421,18 @@ class Agent:
 	def act(self, s):
 		eps = self.getEpsilon()			
 		# global frames; frames = frames + 1
-                num_actions = NUM_DATA - len(s[1])+1
+                num_actions = NUM_DATA - len(s[1])
                 # print 'in act, s', s
 		if random.random() < eps:
-			# return (random.randint(0, num_actions-1), True)
-                        return (num_actions-1, True)
+			return (random.randint(0, num_actions-1), True)
+                        #return (num_actions-1, True)
 
 		else:
 			# s = np.array([s])
 			p = brain.predict_p(s, self.device)[0]
 
 			# a = np.argmax(p)
-			a = np.random.choice(num_actions, p=p)
+                        a = np.random.choice(num_actions, p=p)
 			return (a, False)
 	
 	def train(self, s, a, r, s_):
@@ -504,7 +504,7 @@ class Environment(threading.Thread):
                         not_annotated = set(range(NUM_DATA)).difference(is_annotated)
                         not_annotated = sorted(not_annotated)
                         if a == num_actions-1:
-                            action = (0, True)
+                            action = (0, True)#action is training
                         else:
                             action = (not_annotated[a], False)
                         ######
@@ -516,7 +516,11 @@ class Environment(threading.Thread):
                         self.train_writer.add_summary(summary,self.iteration)
                         self.iteration+=1
 			s_, r, done, info = self.env.step(action)
-                        summary = tf.Summary(value=[tf.Summary.Value(tag='reward', simple_value=r)])
+                        if self.iteration == ANNOTATION_STEP:
+                            done = True
+                            action = (0, True)#action is training
+			    s_, r, _, info = self.env.step(action)
+
                         self.train_writer.add_summary(summary,self.iteration)
                         probs,is_annotated = s_
                         assert probs.shape[0] == NUM_DATA

@@ -18,6 +18,7 @@ RL:
   STATE_SIZE: 128
   THREADS: 7
   THREAD_DELAY: 0.001
+  ANNOTATION_STEP: 20
 #Classifier Args
 classifiers:
   DATASET: MNIST
