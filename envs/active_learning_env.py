@@ -41,10 +41,10 @@ class ActiveLearningEnv(gym.Env):
     metadata = {'render.modes': []}
     reward_range = (-np.inf, np.inf)
 
-    def __init__(self, classifier_name='LeNet_TF', dataset_name='MNist', device=None, summary_writer=None):
+    def __init__(self, classifier_name='LeNet_TF', dataset_name='MNist', device=None, summary_writer=None, config_path=None):
         self.classifier_name = classifier_name
         self.dataset_name = dataset_name
-        config_path = ''
+        self.config_path = config_path
         self.config_path = config_path
         self.device = device
         self.summary_writer = summary_writer

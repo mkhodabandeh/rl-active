@@ -31,13 +31,18 @@ from tflearn.layers import *
 import subprocess
 current_user = subprocess.check_output(['whoami']).strip()
 
-config = yaml.load(open('config.yml'))
+CONFIG_PATH = 'config.yml'
+config = yaml.load(open(CONFIG_PATH))
 rl_args = config['RL']
-classifier_args = config['classifiers']
+shared_args = config['SHARED']
+# classifier_args = config['classifiers']
 
 locals().update(rl_args)
-print sys.argv[2]
-exit()
+locals().update(shared_args)
+
+# print RUN_TIME, THREADS, OPTIMIZERS
+# print sys.argv[2]
+# exit()
 #---------
 class Brain:
 	train_queue = [ [], [], [], [], [] ]	# s, a, r, s', s' terminal mask
@@ -477,7 +482,7 @@ class Environment(threading.Thread):
                 # self.env = ActiveLearningEnv(device='/gpu:0')
                 self.agent_id = agent_id
                 self.train_writer =   tf.summary.FileWriter(AGENT_SUMMARY_DIRS[self.agent_id], tf.get_default_graph())
-                self.env = ActiveLearningEnv(device=device, summary_writer=self.train_writer)
+                self.env = ActiveLearningEnv(device=device, summary_writer=self.train_writer, config_path=CONFIG_PATH)
 		# self.env = gym.make(ENV)
                 
                 self.env.device = device

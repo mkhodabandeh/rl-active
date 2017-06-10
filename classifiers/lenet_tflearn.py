@@ -23,8 +23,8 @@ current_user = subprocess.check_output(['whoami']).strip()
 
 import yaml
 
-#i                   
-NUM_DATA = 200
+# classifier_args = config['classifiers']
+# locals().update(rl_args)
 class LeNetTF(BaseClassifier):
     '''
     Inspired from keras implementation of LeNet:
@@ -56,7 +56,9 @@ class LeNetTF(BaseClassifier):
         self.graph = tf.Graph()
         self.sess = tf.Session(config=tf_config, graph=self.graph)
         if config_path:
+# config = yaml.load(open('config.yml'))
             self.configs = yaml.load(open(config_path))
+            self.num_data = self.configs['SHARED']['NUM_DATA']
             # self.data = self.configs['data']
         else:
             self.configs = {'snapshot':'./snapshots/'}
@@ -69,7 +71,7 @@ class LeNetTF(BaseClassifier):
         
     def _preprocess_data(self):
         #only a portion of the data is used for training the RL agent
-        self.x_train = self.x_train[:NUM_DATA, ...]
+        self.x_train = self.x_train[:self.num_data, ...]
         self.x_train = self.x_train.reshape([-1, 28, 28, 1])
         self.x_test = self.x_test.reshape([-1, 28, 28, 1])
     
