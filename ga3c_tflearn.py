@@ -516,6 +516,8 @@ class Environment(threading.Thread):
                         self.train_writer.add_summary(summary,self.iteration)
                         self.iteration+=1
 			s_, r, done, info = self.env.step(action)
+                        if action[0] == 0:
+                            done = True
                         summary = tf.Summary(value=[tf.Summary.Value(tag='reward', simple_value=r)])
                         self.train_writer.add_summary(summary,self.iteration)
                         probs,is_annotated = s_
