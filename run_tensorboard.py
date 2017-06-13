@@ -1,7 +1,7 @@
 import sys,os
 
 exp=sys.argv[1]
-summary_dir = '{run}_{num}:/local-scratch/mkhodaba/rl-active/{exp}/summaries/{run}_{num}'
+summary_dir = '{run}_{num}:/local-scratch/smuralid/rl-active/{exp}/summaries/{run}_{num}'
 agents=int(sys.argv[2])
 optimizers=1
 
