@@ -77,7 +77,8 @@ class ActiveLearningEnv(gym.Env):
             return -1 
 
     def _step(self, action):
-        label_i, do_train = action #action is a Tuple ( int, boolean)
+        label_i, do_train = action #action is a Tuple ( int, boolean
+        acc = 0 
         if do_train == True: 
             self.classifier.set_annotations(self.is_annotated)
             self.probs = self.classifier.train()
@@ -103,7 +104,7 @@ class ActiveLearningEnv(gym.Env):
             reward = self._compute_reward()
         self.iteration += 1
         done = len(self.is_annotated) == self.max_annotations
-        return (self.probs.copy(), self.is_annotated.copy()), reward, done, None 
+        return (self.probs.copy(), self.is_annotated.copy()), reward, done, acc
 
 
     def _reset(self): 

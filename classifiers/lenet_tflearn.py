@@ -62,8 +62,8 @@ class LeNetTF(BaseClassifier):
             # self.data = self.configs['data']
         else:
             self.configs = {'snapshot':'./snapshots/'}
-            self.batch_size = 128
-            self.epochs = 2
+        self.batch_size = 128
+        self.epochs = 2
 	self.is_annotated = set() 
         self._get_default_data()
         self._create_model()

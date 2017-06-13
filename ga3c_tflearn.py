@@ -516,16 +516,25 @@ class Environment(threading.Thread):
                         self.train_writer.add_summary(summary,self.iteration)
                         self.iteration+=1
 			s_, r, done, info = self.env.step(action)
+
                         if action[0] == 0:
                             done = True
                         summary = tf.Summary(value=[tf.Summary.Value(tag='reward', simple_value=r)])
                         self.train_writer.add_summary(summary,self.iteration)
+                        # if info is not None:
+                        if info!=0:
+                            print '#-----#----#-----#--- Validation Accuracy [agent-{0}]: {1} ---#----#-----#-----#'.format(self.agent_id,info)
+                        if True:
+                            validation_accuracy = info
+                            summary = tf.Summary(value=[tf.Summary.Value(tag='validation_accuracy', simple_value=validation_accuracy)])
+                            # self.train_writer.add_summary(summary,self.validation_iteration)
+                            self.train_writer.add_summary(summary,self.iteration)
                         probs,is_annotated = s_
                         assert probs.shape[0] == NUM_DATA
                         #TODO REMOVE NEXT 3 lines
 
-			if done: # terminal state
-				s_ = None
+			# if done: # terminal state
+				# s_ = None
                         
 			self.agent.train(s, a, r, s_)
 
