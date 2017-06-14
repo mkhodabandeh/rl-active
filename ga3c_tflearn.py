@@ -65,6 +65,7 @@ class Brain:
                 self.graph = tf.Graph()
                 self.sess = tf.Session(graph=self.graph, config=Brain.config)
                 self.rms_is_initialized = False
+                self.optimize_iteration = 0
                 self.iteration = {}
                 self.train_writer = {}
                 # self.test_writer = tf.summary.FileWriter(summaries_dir + '/test', self.sess.graph)
@@ -274,6 +275,17 @@ class Brain:
                         out_action = fully_connected(l_concat, 1, activation='linear', name='out_action_')
                         return out_action
 
+        def save_snapshot(self, optimize_iteration):
+            '''
+            this function takes a snapshot of the Brain: pi_model, v_model, phi_s_model, termination_model
+            the path is in this variable: SNAPSHOT_PATH
+
+            '''
+            pass
+
+        def load_snapshot(self, optimize_iteration):
+            pass
+
 	def optimize(self, device, optimizer_id):
 		if len(self.train_queue[0]) < MIN_BATCH:
 			time.sleep(0)	# yield
@@ -281,7 +293,11 @@ class Brain:
                 
 		with self.lock_queue:
 			s_batch, a_batch, r_batch, s__batch, s_mask_batch = self.train_queue
+                        self.optimize_iteration+=len(s_batch)
 			self.train_queue = [ [], [], [], [], [] ]
+                        if self.optimize_iteration / SNAPSHOT_INTERVAL >= 1:
+                            self.save_snapshot(self.optimize_iteration)
+                            self.optimize_iteration -= SNAPSHOT_INTERVAL
 
                 if len(s_batch) > 5*MIN_BATCH: 
                         print("Optimizer alert! Minimizing batch of %d" % len(s_batch))
@@ -568,6 +584,11 @@ if len(sys.argv) != 2:
     raise Exception('Experiment name not provided!')
 EXP_NAME = sys.argv[1]
 summaries_dir = '/local-scratch/'+current_user+'/rl-active/'+EXP_NAME+'/summaries/'
+
+SNAPSHOT_PATH = '/local-scratch/'+current_user+'/rl-active/'+EXP_NAME+'/snapshots/'
+os.system('mkdir '+SNAPSHOT_PATH+' -p')
+SNAPSHOT_PATH += '{}.snapshot'
+
 
 AGENT_SUMMARY_DIRS = []
 for i in xrange(THREADS):
