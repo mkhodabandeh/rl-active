@@ -342,7 +342,7 @@ class Brain:
                                 # self.train_writer.add_summary(merged_train_summary,0)
                                 if optimizer_id not in self.train_writer:
                                     print 'Creating Train Writer'
-                                    self.train_writer[optimizer_id] =   tf.summary.FileWriter(OPTIMIZERS_SUMMARY_DIRS[optimizer_id], self.sess.graph)
+                                    self.train_writer[optimizer_id] =   tf.summary.FileWriter(OPTIMIZERS_SUMMARY_DIRS[optimizer_id], self.graph)
 
                                     self.iteration[optimizer_id] = 0
 
