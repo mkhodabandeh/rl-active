@@ -11,6 +11,7 @@ tf.logging.set_verbosity(tf.logging.ERROR)
 from base_classifier import BaseClassifier 
 
 import tflearn
+import tflearn.data_utils as du
 from tflearn.layers.core import input_data, dropout, fully_connected
 from tflearn.layers.conv import conv_2d, max_pool_2d
 from tflearn.layers.normalization import local_response_normalization
@@ -65,7 +66,7 @@ class LeNetTF(BaseClassifier):
             # self.data = self.configs['data']
         else:
             self.configs = {'snapshot':'./snapshots/'}
-        self.batch_size = 128
+        self.batch_size = 128 
         self.epochs = 100 
 	self.is_annotated = set() 
         self._get_default_data()
@@ -105,11 +106,13 @@ class LeNetTF(BaseClassifier):
 
 
 
-    def _train(self, data=None):
+    def _train(self, data=None,no_predict=False):
         print('[lenet_tflearn]Creating MNIST model...')
         if self.is_annotated:
             x_train = self.x_train[list(self.is_annotated)]
             y_train = self.y_train[list(self.is_annotated)]
+            x_train, mean = du.featurewise_zero_center(x_train)
+            x_test = du.featurewise_zero_center(self.x_test, mean)
         else:
             x_train = self.x_train
             y_train = self.y_train
@@ -120,12 +123,14 @@ class LeNetTF(BaseClassifier):
             with self.graph.as_default() as g:
                 print '[lenet_tflearn.py::_train] size of input', x_train.shape 
                 with tf.device(self.device):
-                    self.model.fit({'lenet_input': x_train}, {'target': y_train}, n_epoch=self.epochs, validation_set=({'lenet_input': self.x_test}, {'target': self.y_test}), batch_size=self.batch_size, snapshot_step=100, show_metric=True, run_id='convnet_mnist')
+                    self.model.fit({'lenet_input': x_train}, {'target': y_train}, n_epoch=self.epochs, validation_set=({'lenet_input': x_test}, {'target': self.y_test}), batch_size=self.batch_size, snapshot_step=128, show_metric=True, run_id='convnet_mnist')
         except Exception as e:
             print '[lenet_tflearn]EXCEPTION', x_train.shape, y_train.shape
             raise e
             # exit()
         # return self._predict(self.x_train)
+        if no_predict:
+            return
         return self._predict(self.x_train)
 
     def _predict(self, data=None):
@@ -193,13 +198,6 @@ class LeNetTF(BaseClassifier):
                 network = fully_connected(network, 10, activation='softmax')
                 network = regression(network, optimizer='adam', learning_rate=0.01,
                                                 loss='categorical_crossentropy', name='target')
-                # try:
-                    # init = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
-                    # self.sess.run(tf.variables_initializer(tf.get_collection_ref('is_training')))
-                # except:
-                    # init = tf.initialize_all_variables()
-                # self.sess.run(init)
-        # self.sess.run(tf.global_variables_initializer())
         with tf.device(self.device):
             with self.graph.as_default() as g:
                 self.model = tflearn.DNN(network, tensorboard_verbose=0, tensorboard_dir='/tmp/'+current_user+'/tflearn_log', session=self.sess)
@@ -232,14 +230,16 @@ def test_lenet():
     # print 'HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH'*10
     accs = []
     lenet.epochs = 50
-    for i in xrange(5):
+    for i in xrange(10):
         lenet.set_annotations(range(0,200))
         # import random
         # lenet.set_annotations(random.sample(range(0,200), 40))
-        lenet.train()
+        lenet._train(no_predict=True)
         accs.append(lenet.evaluate())
         lenet._reset()
     print accs
+    print 'mean', np.mean(np.array(accs)), 'std', np.std(np.array(accs))
+    exit()
     accs2 = []
     lenet.epochs = 30 
     for i in xrange(5):
