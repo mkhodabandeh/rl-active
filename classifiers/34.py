@@ -59,7 +59,7 @@ class LeNetTF(BaseClassifier):
         self.sess = tf.Session(config=tf_config, graph=self.graph)
         if config_path:
 # config = yaml.load(open('config.yml'))
-            self.configs = yaml.load(open(config_path))
+            #self.configs = yaml.load(open(config_path))
             self.num_data = num_data#self.configs['SHARED']['NUM_DATA']
             # self.num_data = self.configs['SHARED']['NUM_DATA']
             # self.data = self.configs['data']
@@ -227,13 +227,13 @@ class LeNetTF(BaseClassifier):
         self.model.save(self.configs['snapshot']+'/lenet-'+self.ep)
         self.ep+=1
 
-def test_lenet(num_data, init_n, sample_n):
-    lenet = LeNetTF(config_path='./config.yml',device='/gpu:0', num_data=num_data)
+def test_lenet(num_data, init_n, sample_n, gpu_n):
+    lenet = LeNetTF(config_path='./config.yml',device='/gpu:{0}'.format(gpu_n}, num_data=num_data)
     # print 'HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH'*10
     accs = []
-    lenet.epochs = 60
+    lenet.epochs = 20
     import random
-    for i in xrange(6):
+    for i in xrange(1):
         # lenet.set_annotations(range(0,400))
         lenet.set_set_annotations(random.sample(range(0,num_data), sample_n))
         lenet.train()
@@ -255,5 +255,5 @@ if __name__ == '__main__':
     num_data = int(sys.argv[1])
     init_n = int(sys.argv[2])
     sample_n= int(sys.argv[3])
-
-    test_lenet(num_data, init_n, sample_n)
+    gpu_n = int(sys.argv[4])
+    test_lenet(num_data, init_n, sample_n, gpu_n)
