@@ -38,6 +38,12 @@ class BaseClassifier(object):
         """
         raise NotImplementedError
 
+    def set_set_annotations(self, is_annotated):
+        """
+        This function sets a new annotation.
+        """
+        self.is_annotated = is_annotated
+
     def set_annotations(self, is_annotated):
         """
         This function adds a new annotation.
