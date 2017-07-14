@@ -287,6 +287,7 @@ class Brain:
             pass
 
 	def optimize(self, device, optimizer_id):
+                #def optimize
 		if len(self.train_queue[0]) < MIN_BATCH:
 			time.sleep(0)	# yield
 			return

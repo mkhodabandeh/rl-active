@@ -23,6 +23,7 @@ current_user = subprocess.check_output(['whoami']).strip()
 
 import yaml
 
+print 'Lenet file loaded'
 # classifier_args = config['classifiers']
 # locals().update(rl_args)
 class LeNetTF(BaseClassifier):
@@ -52,6 +53,7 @@ class LeNetTF(BaseClassifier):
                                         intra_op_parallelism_threads=1)
         # tf_config.gpu_options.per_process_gpu_memory_fraction = 0.6
         # tf_config.log_device_placement = True
+        
         self.tf_config=tf_config
         self.graph = tf.Graph()
         self.sess = tf.Session(config=tf_config, graph=self.graph)
@@ -59,11 +61,12 @@ class LeNetTF(BaseClassifier):
 # config = yaml.load(open('config.yml'))
             self.configs = yaml.load(open(config_path))
             self.num_data = self.configs['SHARED']['NUM_DATA']
+            # self.num_data = self.configs['SHARED']['NUM_DATA']
             # self.data = self.configs['data']
         else:
             self.configs = {'snapshot':'./snapshots/'}
-            self.batch_size = 128
-            self.epochs = 2
+        self.batch_size = 128
+        self.epochs = 100 
 	self.is_annotated = set() 
         self._get_default_data()
         self._create_model()
@@ -81,7 +84,7 @@ class LeNetTF(BaseClassifier):
         self.num_classes = 10
 
         self.x_train, self.y_train, self.x_test, self.y_test = mnist.load_data(one_hot=True)
-        
+        self.default_loaded = True
         self._preprocess_data()
 
         print('x_train shape:', self.x_train.shape)
@@ -117,7 +120,7 @@ class LeNetTF(BaseClassifier):
             with self.graph.as_default() as g:
                 print '[lenet_tflearn.py::_train] size of input', x_train.shape 
                 with tf.device(self.device):
-                    self.model.fit({'lenet_input': x_train}, {'target': y_train}, n_epoch=1, validation_set=({'lenet_input': self.x_test}, {'target': self.y_test}), batch_size=self.batch_size, snapshot_step=100, show_metric=True, run_id='convnet_mnist')
+                    self.model.fit({'lenet_input': x_train}, {'target': y_train}, n_epoch=self.epochs, validation_set=({'lenet_input': self.x_test}, {'target': self.y_test}), batch_size=self.batch_size, snapshot_step=100, show_metric=True, run_id='convnet_mnist')
         except Exception as e:
             print '[lenet_tflearn]EXCEPTION', x_train.shape, y_train.shape
             raise e
@@ -160,7 +163,8 @@ class LeNetTF(BaseClassifier):
         with self.sess.as_default():
             with self.graph.as_default() as g:
                 if data is None:
-                    self._get_default_data()
+                    if not self.default_loaded: 
+                        self._get_default_data()
                 else:
                     self._get_nondefault_data(data)
                 with tf.device(self.device):
@@ -224,14 +228,29 @@ class LeNetTF(BaseClassifier):
         self.ep+=1
 
 def test_lenet():
-    lenet = LeNetTF(device='/gpu:3')
-    print 'HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH'*10
-    lenet._train()
-    pred_labels = lenet._predict()
-    print(pred_labels.shape)
-    lenet._reset()
-
-    
+    lenet = LeNetTF(config_path='./config.yml',device='/gpu:0')
+    # print 'HHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH'*10
+    accs = []
+    lenet.epochs = 50
+    for i in xrange(5):
+        lenet.set_annotations(range(0,200))
+        # import random
+        # lenet.set_annotations(random.sample(range(0,200), 40))
+        lenet.train()
+        accs.append(lenet.evaluate())
+        lenet._reset()
+    print accs
+    accs2 = []
+    lenet.epochs = 30 
+    for i in xrange(5):
+        lenet.set_annotations(range(0,200))
+        # import random
+        # lenet.set_annotations(random.sample(range(0,200), 40))
+        lenet.train()
+        accs2.append(lenet.evaluate())
+        lenet._reset()
+    print accs
+    print accs2
     # print(accuracy
 
 if __name__ == '__main__':
